@@ -11,6 +11,8 @@ import com.example.data.model.PrayerItem
 import com.example.data.model.PrayerType
 import com.example.data.model.SolarTimes
 import com.example.repository.PrayerRepository
+import com.example.update.AppUpdateInfo
+import com.example.update.AppUpdateManager
 import com.example.util.LocationHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,7 +40,10 @@ data class PrayerUiState(
   val isSyncing: Boolean = false,
   val isDetectingLocation: Boolean = false,
   val testMessage: String? = null,
-  val isBatteryOptimizedMode: Boolean = true
+  val isBatteryOptimizedMode: Boolean = true,
+  val appUpdateInfo: AppUpdateInfo? = null,
+  val isCheckingUpdate: Boolean = false,
+  val showUpdateDialog: Boolean = false
 )
 
 class PrayerViewModel(application: Application) : AndroidViewModel(application) {
@@ -46,6 +51,9 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
 
   private val _uiState = MutableStateFlow(PrayerUiState())
   val uiState: StateFlow<PrayerUiState> = _uiState.asStateFlow()
+
+  private val _countdownText = MutableStateFlow("--:--:--")
+  val countdownText: StateFlow<String> = _countdownText.asStateFlow()
 
   private var currentEntity: PrayerEntity? = null
 
@@ -75,6 +83,47 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
         delay(1000)
       }
     }
+
+    // Automatically check for app updates from GitHub releases on startup
+    checkForAppUpdates(silent = true)
+  }
+
+  fun checkForAppUpdates(silent: Boolean = false) {
+    viewModelScope.launch {
+      _uiState.update { it.copy(isCheckingUpdate = true) }
+      try {
+        val updateInfo = AppUpdateManager.checkForUpdates(getApplication())
+        _uiState.update {
+          it.copy(
+            appUpdateInfo = updateInfo,
+            showUpdateDialog = updateInfo.hasUpdate
+          )
+        }
+        if (updateInfo.hasUpdate) {
+          AppUpdateManager.showUpdateNotification(getApplication(), updateInfo)
+        } else if (!silent) {
+          _uiState.update {
+            it.copy(testMessage = "You have the latest version (v${updateInfo.currentVersionName})")
+          }
+        }
+      } catch (e: Exception) {
+        if (!silent) {
+          _uiState.update {
+            it.copy(testMessage = "Update check failed: ${e.message}")
+          }
+        }
+      } finally {
+        _uiState.update { it.copy(isCheckingUpdate = false) }
+      }
+    }
+  }
+
+  fun dismissUpdateDialog() {
+    _uiState.update { it.copy(showUpdateDialog = false) }
+  }
+
+  fun openUpdateDialog() {
+    _uiState.update { it.copy(showUpdateDialog = true) }
   }
 
   fun syncToday(city: CityLocation = _uiState.value.currentCity) {
@@ -121,6 +170,14 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
 
   fun selectCity(city: CityLocation) {
     syncToday(city)
+  }
+
+  fun hasRequestedInitialPermissions(): Boolean {
+    return repository.hasRequestedInitialPermissions()
+  }
+
+  fun setInitialPermissionsRequested(requested: Boolean) {
+    repository.setInitialPermissionsRequested(requested)
   }
 
   fun togglePrayerNotification(prayerName: String, enabled: Boolean) {
@@ -375,12 +432,9 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
         current.lastSyncedFormatted == cached.lastSyncFormatted &&
         current.syncSource == entity.syncSource
 
-    if (listsUnchanged) {
-      // FAST PATH: Lists are structurally identical, preserve previous references so LazyColumn cards skip recomposition
-      if (current.countdownText != countdownStr) {
-        _uiState.update { it.copy(countdownText = countdownStr) }
-      }
-    } else {
+    _countdownText.value = countdownStr
+
+    if (!listsUnchanged) {
       // FULL UPDATE: Prayer transition, status change, or notification toggle occurred
       _uiState.update {
         it.copy(

@@ -87,7 +87,19 @@ object PrayerSyncManager {
     // Try online API
     try {
       val apiService = PrayerApiService.create()
-      val response = apiService.getTimingsByCity(city = city.name, country = city.country)
+      val response = if (city.latitude != 0.0 || city.longitude != 0.0) {
+        try {
+          apiService.getTimingsByCoordinates(
+            timestamp = System.currentTimeMillis() / 1000,
+            latitude = city.latitude,
+            longitude = city.longitude
+          )
+        } catch (_: Exception) {
+          apiService.getTimingsByCity(city = city.name, country = city.country)
+        }
+      } else {
+        apiService.getTimingsByCity(city = city.name, country = city.country)
+      }
       val timings = response.data?.timings
       if (timings != null && timings.fajr != null) {
         entity = PrayerEntity(
@@ -101,7 +113,7 @@ object PrayerSyncManager {
           maghrib = (timings.maghrib ?: "18:00").trim().split(" ")[0],
           isha = (timings.isha ?: "19:30").trim().split(" ")[0],
           lastSyncedAt = System.currentTimeMillis(),
-          syncSource = "Google & Aladhan Cloud API (Online)"
+          syncSource = "Google & Aladhan Cloud API (Online GPS)"
         )
       }
     } catch (_: Exception) {

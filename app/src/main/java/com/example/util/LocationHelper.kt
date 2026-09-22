@@ -4,14 +4,20 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.location.Geocoder
 import android.location.Location
+import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Build
+import android.os.Bundle
+import android.os.Looper
 import android.util.Log
 import com.example.data.model.CityLocation
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Locale
 import java.util.TimeZone
+import kotlin.coroutines.resume
 
 object LocationHelper {
   private const val TAG = "LocationHelper"
@@ -31,18 +37,33 @@ object LocationHelper {
 
       var bestLocation: Location? = null
       for (provider in providers) {
-        if (locationManager.isProviderEnabled(provider)) {
-          val loc = locationManager.getLastKnownLocation(provider)
-          if (loc != null) {
-            if (bestLocation == null || loc.accuracy < bestLocation.accuracy || loc.time > bestLocation.time) {
-              bestLocation = loc
+        try {
+          if (locationManager.isProviderEnabled(provider)) {
+            val loc = locationManager.getLastKnownLocation(provider)
+            if (loc != null) {
+              if (bestLocation == null || loc.time > bestLocation.time) {
+                bestLocation = loc
+              }
             }
           }
+        } catch (e: Exception) {
+          Log.w(TAG, "Error checking provider $provider", e)
+        }
+      }
+
+      // If no cached location or cached location is older than 30 minutes, actively request fresh GPS fix
+      val isStale = bestLocation == null || (System.currentTimeMillis() - bestLocation.time > 30 * 60 * 1000)
+      if (isStale) {
+        val freshLocation = withTimeoutOrNull(5000L) {
+          requestFreshLocation(locationManager)
+        }
+        if (freshLocation != null) {
+          bestLocation = freshLocation
         }
       }
 
       if (bestLocation == null) {
-        Log.w(TAG, "No cached location found from providers")
+        Log.w(TAG, "No cached or fresh location found from providers")
         return@withContext null
       }
 
@@ -89,4 +110,47 @@ object LocationHelper {
       null
     }
   }
+
+  @SuppressLint("MissingPermission")
+  private suspend fun requestFreshLocation(locationManager: LocationManager): Location? =
+    suspendCancellableCoroutine { cont ->
+      val listener = object : LocationListener {
+        override fun onLocationChanged(location: Location) {
+          if (cont.isActive) {
+            cont.resume(location)
+          }
+          try {
+            locationManager.removeUpdates(this)
+          } catch (_: Exception) {}
+        }
+
+        override fun onProviderDisabled(provider: String) {}
+        override fun onProviderEnabled(provider: String) {}
+        @Deprecated("Deprecated in Java")
+        override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+      }
+
+      cont.invokeOnCancellation {
+        try {
+          locationManager.removeUpdates(listener)
+        } catch (_: Exception) {}
+      }
+
+      var requested = false
+      val looper = Looper.getMainLooper()
+      for (provider in listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)) {
+        try {
+          if (locationManager.isProviderEnabled(provider)) {
+            locationManager.requestLocationUpdates(provider, 0L, 0f, listener, looper)
+            requested = true
+          }
+        } catch (e: Exception) {
+          Log.w(TAG, "Could not request updates for $provider", e)
+        }
+      }
+
+      if (!requested) {
+        if (cont.isActive) cont.resume(null)
+      }
+    }
 }

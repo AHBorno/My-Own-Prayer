@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.MarqueeSpacing
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
@@ -42,6 +43,7 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material.icons.outlined.Bedtime
@@ -100,15 +102,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.BuildConfig
 import com.example.data.model.CityLocation
 import com.example.data.model.ForbiddenTimeItem
 import com.example.data.model.PrayerItem
 import com.example.data.model.PrayerType
 import com.example.data.model.SolarTimes
+import com.example.update.AppUpdateManager
 import com.example.util.QiblaHelper
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.flow.StateFlow
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -120,37 +125,43 @@ fun PrayerScreen(
   val uiState by viewModel.uiState.collectAsStateWithLifecycle()
   val snackbarHostState = remember { SnackbarHostState() }
 
+  val onTogglePrayer = remember(viewModel) {
+    { name: String, enabled: Boolean ->
+      viewModel.togglePrayerNotification(name, enabled)
+    }
+  }
+  val onToggleForbidden = remember(viewModel) {
+    { name: String, enabled: Boolean ->
+      viewModel.toggleForbiddenNotification(name, enabled)
+    }
+  }
+
   var showCityDialog by remember { mutableStateOf(false) }
   var showQiblaCompass by remember { mutableStateOf(false) }
 
-  // Check notification permission for Android 13+
-  var hasNotificationPermission by remember {
-    mutableStateOf(
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        ContextCompat.checkSelfPermission(
-          context,
-          Manifest.permission.POST_NOTIFICATIONS
-        ) == PackageManager.PERMISSION_GRANTED
-      } else {
-        true
-      }
-    )
-  }
-
-  val notificationPermissionLauncher = rememberLauncherForActivityResult(
-    contract = ActivityResultContracts.RequestPermission()
-  ) { isGranted ->
-    hasNotificationPermission = isGranted
-  }
-
-  // Location permissions launcher
+  // Permission checkers
   fun checkLocationPermission(): Boolean {
     val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
     val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
     return fine || coarse
   }
 
+  fun checkNotificationPermission(): Boolean {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+    } else {
+      true
+    }
+  }
+
   var hasLocationPermission by remember { mutableStateOf(checkLocationPermission()) }
+  var hasNotificationPermission by remember { mutableStateOf(checkNotificationPermission()) }
+
+  val notificationPermissionLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.RequestPermission()
+  ) { isGranted ->
+    hasNotificationPermission = isGranted
+  }
 
   val locationPermissionLauncher = rememberLauncherForActivityResult(
     contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -160,6 +171,55 @@ fun PrayerScreen(
     hasLocationPermission = granted
     if (granted) {
       viewModel.detectCurrentLocation()
+    }
+  }
+
+  val initialPermissionsToRequest = remember {
+    buildList {
+      add(Manifest.permission.ACCESS_FINE_LOCATION)
+      add(Manifest.permission.ACCESS_COARSE_LOCATION)
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        add(Manifest.permission.POST_NOTIFICATIONS)
+      }
+    }.toTypedArray()
+  }
+
+  val firstLaunchPermissionsLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.RequestMultiplePermissions()
+  ) { permissions ->
+    val locationGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                          permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+    val notifGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      permissions[Manifest.permission.POST_NOTIFICATIONS] == true
+    } else {
+      true
+    }
+
+    hasLocationPermission = locationGranted
+    hasNotificationPermission = notifGranted
+
+    if (locationGranted) {
+      viewModel.detectCurrentLocation()
+    }
+  }
+
+  // Automatic first-launch permissions & GPS location update
+  LaunchedEffect(Unit) {
+    val isFirstLaunch = !viewModel.hasRequestedInitialPermissions()
+    if (isFirstLaunch) {
+      viewModel.setInitialPermissionsRequested(true)
+      if (checkLocationPermission()) {
+        hasLocationPermission = true
+        viewModel.detectCurrentLocation()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !checkNotificationPermission()) {
+          notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+      } else {
+        firstLaunchPermissionsLauncher.launch(initialPermissionsToRequest)
+      }
+    } else {
+      hasLocationPermission = checkLocationPermission()
+      hasNotificationPermission = checkNotificationPermission()
     }
   }
 
@@ -300,6 +360,59 @@ fun PrayerScreen(
         contentPadding = PaddingValues(vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
       ) {
+        // Location Permission Alert (if user denied or hasn't granted location)
+        if (!hasLocationPermission) {
+          item(key = "location_permission_alert") {
+            Card(
+              colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer
+              ),
+              shape = RoundedCornerShape(16.dp),
+              modifier = Modifier.fillMaxWidth()
+            ) {
+              Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Icon(
+                  imageVector = Icons.Default.LocationOn,
+                  contentDescription = "Location permission alert",
+                  tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                  modifier = Modifier.size(32.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                  Text(
+                    text = "GPS Location Access",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                  )
+                  Text(
+                    text = "Allow location access to automatically determine your city and compute exact prayer times via GPS.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                  )
+                  Spacer(modifier = Modifier.height(8.dp))
+                  Button(
+                    onClick = {
+                      locationPermissionLauncher.launch(
+                        arrayOf(
+                          Manifest.permission.ACCESS_FINE_LOCATION,
+                          Manifest.permission.ACCESS_COARSE_LOCATION
+                        )
+                      )
+                    },
+                    modifier = Modifier.testTag("grant_location_permission_button")
+                  ) {
+                    Text("Enable GPS Location")
+                  }
+                }
+              }
+            }
+          }
+        }
+
         // Notification Permission Alert
         if (!hasNotificationPermission && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
           item(key = "notification_permission_alert") {
@@ -346,6 +459,75 @@ fun PrayerScreen(
           }
         }
 
+        // Available App Update Alert Banner
+        if (uiState.appUpdateInfo?.hasUpdate == true) {
+          val updateInfo = uiState.appUpdateInfo!!
+          item(key = "app_update_available_banner") {
+            val uriHandler = LocalUriHandler.current
+            val context = LocalContext.current
+            Card(
+              colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer
+              ),
+              shape = RoundedCornerShape(16.dp),
+              modifier = Modifier
+                .fillMaxWidth()
+                .clickable { viewModel.openUpdateDialog() }
+                .testTag("app_update_banner")
+            ) {
+              Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Icon(
+                  imageVector = Icons.Default.SystemUpdate,
+                  contentDescription = "Update available",
+                  tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                  modifier = Modifier.size(32.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                  Text(
+                    text = "Update Available (v${updateInfo.latestVersionName})",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                  )
+                  Text(
+                    text = "A new release is available on GitHub. Tap to view notes & install.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                  )
+                  Spacer(modifier = Modifier.height(8.dp))
+                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                      onClick = {
+                        if (updateInfo.apkDownloadUrl != null) {
+                          AppUpdateManager.startApkDownload(
+                            context,
+                            updateInfo.apkDownloadUrl,
+                            updateInfo.apkFileName
+                          )
+                        } else {
+                          uriHandler.openUri(updateInfo.htmlUrl)
+                        }
+                      },
+                      modifier = Modifier.testTag("banner_download_update_button")
+                    ) {
+                      Text("Update Now")
+                    }
+                    OutlinedButton(
+                      onClick = { viewModel.openUpdateDialog() }
+                    ) {
+                      Text("View Notes")
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+
         // Hero Card: Current/Next Prayer & Live Countdown (with Qibla button click)
         item(key = "hero_card") {
           NextPrayerHeroCard(
@@ -353,6 +535,7 @@ fun PrayerScreen(
             nextPrayer = uiState.nextPrayer,
             isCloseToNextPrayer = uiState.isCloseToNextPrayer,
             countdownText = uiState.countdownText,
+            countdownFlow = viewModel.countdownText,
             cityName = uiState.currentCity.displayName,
             cityLocation = uiState.currentCity,
             onOpenQibla = { showQiblaCompass = true }
@@ -385,9 +568,7 @@ fun PrayerScreen(
         items(uiState.prayers, key = { "obligatory_${it.type.name}" }) { prayerItem ->
           PrayerRowCard(
             prayer = prayerItem,
-            onToggleNotification = { enabled ->
-              viewModel.togglePrayerNotification(prayerItem.type.displayName, enabled)
-            }
+            onToggleNotification = onTogglePrayer
           )
         }
 
@@ -438,9 +619,7 @@ fun PrayerScreen(
           items(uiState.voluntaryPrayers, key = { "voluntary_${it.type.name}" }) { prayerItem ->
             PrayerRowCard(
               prayer = prayerItem,
-              onToggleNotification = { enabled ->
-                viewModel.togglePrayerNotification(prayerItem.type.displayName, enabled)
-              }
+              onToggleNotification = onTogglePrayer
             )
           }
         }
@@ -449,9 +628,7 @@ fun PrayerScreen(
         item(key = "forbidden_times_card") {
           ForbiddenPrayerTimesCard(
             forbiddenTimes = uiState.forbiddenTimes,
-            onToggleNotification = { name, enabled ->
-              viewModel.toggleForbiddenNotification(name, enabled)
-            }
+            onToggleNotification = onToggleForbidden
           )
         }
 
@@ -570,6 +747,29 @@ fun PrayerScreen(
                 .padding(4.dp)
                 .testTag("the_quran_site_link")
             )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+              text = "Version ${BuildConfig.VERSION_NAME}",
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier
+                .clickable {
+                  viewModel.checkForAppUpdates(silent = false)
+                }
+                .padding(4.dp)
+                .testTag("app_version_text")
+            )
+            Text(
+              text = "Check for updates",
+              style = MaterialTheme.typography.labelSmall,
+              color = MaterialTheme.colorScheme.primary,
+              modifier = Modifier
+                .clickable {
+                  viewModel.checkForAppUpdates(silent = false)
+                }
+                .padding(horizontal = 8.dp, vertical = 2.dp)
+                .testTag("check_for_updates_button")
+            )
           }
         }
       }
@@ -608,6 +808,90 @@ fun PrayerScreen(
       onDismiss = { showCityDialog = false }
     )
   }
+
+  // App Update Modal Dialog
+  if (uiState.showUpdateDialog && uiState.appUpdateInfo != null) {
+    AppUpdateDialog(
+      updateInfo = uiState.appUpdateInfo!!,
+      onDismiss = { viewModel.dismissUpdateDialog() }
+    )
+  }
+}
+
+/**
+ * Dialog showing GitHub release update details and download action.
+ */
+@Composable
+fun AppUpdateDialog(
+  updateInfo: com.example.update.AppUpdateInfo,
+  onDismiss: () -> Unit
+) {
+  val context = LocalContext.current
+  val uriHandler = LocalUriHandler.current
+
+  AlertDialog(
+    onDismissRequest = onDismiss,
+    icon = {
+      Icon(
+        imageVector = Icons.Default.SystemUpdate,
+        contentDescription = "App Update",
+        tint = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.size(32.dp)
+      )
+    },
+    title = {
+      Text(
+        text = "New Update Available: v${updateInfo.latestVersionName}",
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold
+      )
+    },
+    text = {
+      Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+          text = "Current Version: v${updateInfo.currentVersionName}\nLatest Version: v${updateInfo.latestVersionName}",
+          style = MaterialTheme.typography.labelMedium,
+          color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+          text = "What's New:",
+          style = MaterialTheme.typography.titleSmall,
+          fontWeight = FontWeight.SemiBold
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+          text = updateInfo.releaseNotes.ifBlank { "Performance improvements, fixes, and updates." },
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurface
+        )
+      }
+    },
+    confirmButton = {
+      Button(
+        onClick = {
+          onDismiss()
+          if (updateInfo.apkDownloadUrl != null) {
+            AppUpdateManager.startApkDownload(
+              context,
+              updateInfo.apkDownloadUrl,
+              updateInfo.apkFileName
+            )
+          } else {
+            uriHandler.openUri(updateInfo.htmlUrl)
+          }
+        },
+        modifier = Modifier.testTag("dialog_update_button")
+      ) {
+        Text("Download & Install")
+      }
+    },
+    dismissButton = {
+      TextButton(onClick = onDismiss) {
+        Text("Later")
+      }
+    }
+  )
 }
 
 /**
@@ -932,9 +1216,7 @@ fun ForbiddenPrayerTimesCard(
             isDark = isDark,
             titleColor = redTitleColor,
             bodyColor = redBodyColor,
-            onToggleNotification = { enabled ->
-              onToggleNotification(item.name, enabled)
-            }
+            onToggleNotification = onToggleNotification
           )
         }
       }
@@ -948,7 +1230,7 @@ fun ForbiddenRow(
   isDark: Boolean,
   titleColor: Color,
   bodyColor: Color,
-  onToggleNotification: (Boolean) -> Unit = {}
+  onToggleNotification: (String, Boolean) -> Unit = { _, _ -> }
 ) {
   val rowBg = if (item.isActiveNow) {
     if (isDark) Color(0xFF4C1D24) else Color(0xFFFEE2E2)
@@ -1002,7 +1284,15 @@ fun ForbiddenRow(
           fontSize = 11.sp,
           maxLines = 1,
           softWrap = false,
-          modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE)
+          modifier = Modifier
+            .graphicsLayer { }
+            .basicMarquee(
+              iterations = Int.MAX_VALUE,
+              repeatDelayMillis = 2500,
+              initialDelayMillis = if (item.isActiveNow) 1200 else 3000,
+              velocity = 28.dp,
+              spacing = MarqueeSpacing(32.dp)
+            )
         )
       }
 
@@ -1036,7 +1326,7 @@ fun ForbiddenRow(
             modifier = Modifier
               .size(36.dp)
               .clip(CircleShape)
-              .clickable { onToggleNotification(!item.notificationEnabled) }
+              .clickable { onToggleNotification(item.name, !item.notificationEnabled) }
               .testTag("forbidden_notif_toggle_${item.name.replace(" ", "_").lowercase()}")
           ) {
             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
@@ -1201,6 +1491,7 @@ fun NextPrayerHeroCard(
   nextPrayer: PrayerItem? = null,
   isCloseToNextPrayer: Boolean = false,
   countdownText: String = "--:--:--",
+  countdownFlow: StateFlow<String>? = null,
   cityName: String = "Makkah",
   cityLocation: CityLocation = CityLocation.DEFAULT_CITY,
   onOpenQibla: () -> Unit = {}
@@ -1374,7 +1665,7 @@ fun NextPrayerHeroCard(
         // Dynamic placement based on closeness to next prayer:
         if (showUpcomingOnTop) {
           // Approaching next prayer: Countdown bar is on top, current prayer is smaller below
-          CountdownTimerBar(countdownText = countdownText)
+          CountdownTimerBar(countdownText = countdownText, countdownFlow = countdownFlow)
 
           if (bottomPrayer != null) {
             Spacer(modifier = Modifier.height(10.dp))
@@ -1389,10 +1680,11 @@ fun NextPrayerHeroCard(
           if (bottomPrayer != null) {
             CompactUpcomingPrayerBar(
               prayer = bottomPrayer,
-              countdownText = countdownText
+              countdownText = countdownText,
+              countdownFlow = countdownFlow
             )
           } else {
-            CountdownTimerBar(countdownText = countdownText)
+            CountdownTimerBar(countdownText = countdownText, countdownFlow = countdownFlow)
           }
         }
       }
@@ -1403,9 +1695,12 @@ fun NextPrayerHeroCard(
 @Composable
 private fun CompactUpcomingPrayerBar(
   prayer: PrayerItem,
-  countdownText: String
+  countdownText: String,
+  countdownFlow: StateFlow<String>? = null
 ) {
   val icon = getPrayerIcon(prayer.type)
+  val liveCountdown = countdownFlow?.collectAsStateWithLifecycle()?.value ?: countdownText
+
   Surface(
     shape = RoundedCornerShape(14.dp),
     color = Color(0x28000000),
@@ -1480,7 +1775,7 @@ private fun CompactUpcomingPrayerBar(
           )
           Spacer(modifier = Modifier.width(4.dp))
           Text(
-            text = "in $countdownText",
+            text = "in $liveCountdown",
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
             color = Color(0xFFFDE047),
@@ -1563,7 +1858,12 @@ private fun CompactSecondaryPrayerBar(
 }
 
 @Composable
-private fun CountdownTimerBar(countdownText: String) {
+private fun CountdownTimerBar(
+  countdownText: String,
+  countdownFlow: StateFlow<String>? = null
+) {
+  val liveCountdown = countdownFlow?.collectAsStateWithLifecycle()?.value ?: countdownText
+
   Surface(
     shape = RoundedCornerShape(14.dp),
     color = Color(0x24000000),
@@ -1589,7 +1889,7 @@ private fun CountdownTimerBar(countdownText: String) {
         )
       }
       Text(
-        text = countdownText,
+        text = liveCountdown,
         style = MaterialTheme.typography.titleMedium,
         fontWeight = FontWeight.Bold,
         color = Color(0xFFFDE047),
@@ -1677,7 +1977,7 @@ fun ArchitectureBullet(title: String, desc: String) {
 @Composable
 fun PrayerRowCard(
   prayer: PrayerItem,
-  onToggleNotification: (Boolean) -> Unit
+  onToggleNotification: (String, Boolean) -> Unit = { _, _ -> }
 ) {
   val isHighlighted = prayer.isNext
   val isCurrent = prayer.isCurrent
@@ -1798,6 +2098,11 @@ fun PrayerRowCard(
           }
 
           if (bottomText.isNotEmpty()) {
+            val initialDelay = when {
+              isCurrent -> 1200
+              isHighlighted -> 2200
+              else -> 3600
+            }
             Text(
               text = bottomText,
               style = MaterialTheme.typography.labelSmall,
@@ -1805,7 +2110,15 @@ fun PrayerRowCard(
               fontWeight = if (isCurrent) FontWeight.Medium else FontWeight.Normal,
               maxLines = 1,
               softWrap = false,
-              modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE)
+              modifier = Modifier
+                .graphicsLayer { }
+                .basicMarquee(
+                  iterations = Int.MAX_VALUE,
+                  repeatDelayMillis = 2500,
+                  initialDelayMillis = initialDelay,
+                  velocity = 28.dp,
+                  spacing = MarqueeSpacing(32.dp)
+                )
             )
           }
         }
@@ -1840,7 +2153,7 @@ fun PrayerRowCard(
             modifier = Modifier
               .size(38.dp)
               .clip(CircleShape)
-              .clickable { onToggleNotification(!prayer.notificationEnabled) }
+              .clickable { onToggleNotification(prayer.type.displayName, !prayer.notificationEnabled) }
               .testTag("prayer_notif_toggle_${prayer.type.name.lowercase()}")
           ) {
             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {

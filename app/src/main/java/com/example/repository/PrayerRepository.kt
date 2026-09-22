@@ -19,6 +19,15 @@ class PrayerRepository(private val context: Context) {
 
   private val KEY_ENABLED_PRAYERS = "key_enabled_prayers"
   private val KEY_ENABLED_FORBIDDEN_TIMES = "key_enabled_forbidden_times"
+  private val KEY_HAS_REQUESTED_INITIAL_PERMISSIONS = "key_has_requested_initial_permissions"
+
+  fun hasRequestedInitialPermissions(): Boolean {
+    return prefs.getBoolean(KEY_HAS_REQUESTED_INITIAL_PERMISSIONS, false)
+  }
+
+  fun setInitialPermissionsRequested(requested: Boolean) {
+    prefs.edit().putBoolean(KEY_HAS_REQUESTED_INITIAL_PERMISSIONS, requested).apply()
+  }
 
   fun getTodayPrayerTimes(): Flow<PrayerEntity?> {
     val todayDateStr = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
