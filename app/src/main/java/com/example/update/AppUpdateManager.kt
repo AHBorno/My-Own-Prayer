@@ -32,14 +32,16 @@ data class AppUpdateInfo(
   val releaseNotes: String,
   val apkDownloadUrl: String?,
   val htmlUrl: String,
-  val apkFileName: String?
+  val apkFileName: String?,
+  val errorMessage: String? = null
 )
 
 object AppUpdateManager {
   private const val TAG = "AppUpdateManager"
   private const val GITHUB_OWNER = "AHBorno"
   private const val GITHUB_REPO = "My-Own-Prayer"
-  private const val API_URL = "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO/releases/latest"
+  private const val LATEST_RELEASE_URL = "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO/releases/latest"
+  private const val ALL_RELEASES_URL = "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO/releases?per_page=10"
 
   const val UPDATE_CHANNEL_ID = "app_updates_channel"
   private const val UPDATE_NOTIFICATION_ID = 9001
@@ -51,19 +53,58 @@ object AppUpdateManager {
 
   /**
    * Checks GitHub releases for a newer version compared to current BuildConfig.VERSION_NAME.
+   * Checks /releases/latest first, and falls back to /releases to support Pre-releases (like 1.1-beta).
    */
   suspend fun checkForUpdates(context: Context): AppUpdateInfo = withContext(Dispatchers.IO) {
     val currentVersion = BuildConfig.VERSION_NAME
     try {
-      val request = Request.Builder()
-        .url(API_URL)
+      // First try /releases (which includes Pre-releases and Drafts), then /releases/latest
+      var releaseJson: JSONObject? = null
+      var httpCode = 0
+
+      val allReleasesRequest = Request.Builder()
+        .url(ALL_RELEASES_URL)
         .header("Accept", "application/vnd.github.v3+json")
         .header("User-Agent", "My-Own-Prayer-App")
         .build()
 
-      val response = httpClient.newCall(request).execute()
-      if (!response.isSuccessful) {
-        Log.w(TAG, "GitHub API returned code: ${response.code}")
+      val allReleasesResp = httpClient.newCall(allReleasesRequest).execute()
+      httpCode = allReleasesResp.code
+      if (allReleasesResp.isSuccessful) {
+        val body = allReleasesResp.body?.string().orEmpty()
+        if (body.startsWith("[")) {
+          val jsonArray = org.json.JSONArray(body)
+          if (jsonArray.length() > 0) {
+            releaseJson = jsonArray.getJSONObject(0)
+          }
+        }
+      }
+
+      // If /releases didn't yield a release (e.g. 404), try /releases/latest as fallback
+      if (releaseJson == null && httpCode != 404) {
+        val latestRequest = Request.Builder()
+          .url(LATEST_RELEASE_URL)
+          .header("Accept", "application/vnd.github.v3+json")
+          .header("User-Agent", "My-Own-Prayer-App")
+          .build()
+        val latestResp = httpClient.newCall(latestRequest).execute()
+        httpCode = latestResp.code
+        if (latestResp.isSuccessful) {
+          val body = latestResp.body?.string().orEmpty()
+          if (body.startsWith("{")) {
+            releaseJson = JSONObject(body)
+          }
+        }
+      }
+
+      if (releaseJson == null) {
+        val msg = when (httpCode) {
+          404 -> "Repository is private or URL incorrect (HTTP 404). If private, make the repo Public on GitHub so the app can read releases."
+          403 -> "GitHub API rate limit exceeded (HTTP 403). Try again in a few minutes."
+          0 -> "Could not connect to GitHub."
+          else -> "GitHub returned HTTP $httpCode."
+        }
+        Log.w(TAG, msg)
         return@withContext AppUpdateInfo(
           hasUpdate = false,
           latestVersionName = currentVersion,
@@ -71,30 +112,20 @@ object AppUpdateManager {
           releaseNotes = "",
           apkDownloadUrl = null,
           htmlUrl = "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases",
-          apkFileName = null
+          apkFileName = null,
+          errorMessage = msg
         )
       }
 
-      val body = response.body?.string() ?: return@withContext AppUpdateInfo(
-        hasUpdate = false,
-        latestVersionName = currentVersion,
-        currentVersionName = currentVersion,
-        releaseNotes = "",
-        apkDownloadUrl = null,
-        htmlUrl = "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases",
-        apkFileName = null
-      )
-
-      val json = JSONObject(body)
-      val rawTagName = json.optString("tag_name", "")
+      val rawTagName = releaseJson.optString("tag_name", "")
       val cleanTagName = rawTagName.trim().removePrefix("v").removePrefix("V")
-      val releaseBody = json.optString("body", "A new version of the app is available.")
-      val htmlUrl = json.optString("html_url", "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases")
+      val releaseBody = releaseJson.optString("body", "A new version of the app is available.")
+      val htmlUrl = releaseJson.optString("html_url", "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases")
 
       // Search assets for .apk file
       var apkUrl: String? = null
       var apkName: String? = null
-      val assets = json.optJSONArray("assets")
+      val assets = releaseJson.optJSONArray("assets")
       if (assets != null) {
         for (i in 0 until assets.length()) {
           val asset = assets.getJSONObject(i)
@@ -116,7 +147,8 @@ object AppUpdateManager {
         releaseNotes = releaseBody,
         apkDownloadUrl = apkUrl,
         htmlUrl = htmlUrl,
-        apkFileName = apkName
+        apkFileName = apkName,
+        errorMessage = null
       )
     } catch (e: Exception) {
       Log.w(TAG, "Error checking for updates: ${e.message}")
@@ -127,7 +159,8 @@ object AppUpdateManager {
         releaseNotes = "",
         apkDownloadUrl = null,
         htmlUrl = "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases",
-        apkFileName = null
+        apkFileName = null,
+        errorMessage = "Error: ${e.localizedMessage ?: e.message}"
       )
     }
   }

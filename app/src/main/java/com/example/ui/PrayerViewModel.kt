@@ -102,8 +102,13 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
         if (updateInfo.hasUpdate) {
           AppUpdateManager.showUpdateNotification(getApplication(), updateInfo)
         } else if (!silent) {
+          val feedbackText = if (updateInfo.errorMessage != null) {
+            updateInfo.errorMessage
+          } else {
+            "You have the latest version (v${updateInfo.currentVersionName})"
+          }
           _uiState.update {
-            it.copy(testMessage = "You have the latest version (v${updateInfo.currentVersionName})")
+            it.copy(testMessage = feedbackText)
           }
         }
       } catch (e: Exception) {
