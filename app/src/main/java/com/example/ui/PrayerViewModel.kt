@@ -274,7 +274,8 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
     val type: PrayerType,
     val timeMillis: Long,
     val endMillis: Long,
-    val formatted12h: String
+    val formatted12h: String,
+    val endFormatted12h: String
   )
 
   private data class ForbiddenInterval(
@@ -306,7 +307,8 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
     val middayZenithMillis: Long,
     val sunsetTransitionMillis: Long,
     val tahajjudEarlyMillis: Long,
-    val tahajjudTonightMillis: Long
+    val tahajjudTonightMillis: Long,
+    val tomorrowFajrMillis: Long
   )
 
   private var cachedDaySchedule: CachedDaySchedule? = null
@@ -341,30 +343,30 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
     val tahajjudEarlyMorningMillis = fajrMillis - (nightDurationEarly / 3)
 
     val rawObligatory = listOf(
-      RawPrayerInfo(PrayerType.FAJR, fajrMillis, sunriseMillis, format12h(entity.fajr)),
-      RawPrayerInfo(PrayerType.DHUHR, dhuhrMillis, asrMillis, format12h(entity.dhuhr)),
-      RawPrayerInfo(PrayerType.ASR, asrMillis, sunsetTransitionMillis, format12h(entity.asr)),
-      RawPrayerInfo(PrayerType.MAGHRIB, maghribMillis, ishaMillis, format12h(entity.maghrib)),
-      RawPrayerInfo(PrayerType.ISHA, ishaMillis, tahajjudTonightMillis, format12h(entity.isha))
+      RawPrayerInfo(PrayerType.FAJR, fajrMillis, sunriseMillis, format12h(entity.fajr), format12h(entity.sunrise)),
+      RawPrayerInfo(PrayerType.DHUHR, dhuhrMillis, asrMillis, format12h(entity.dhuhr), format12h(entity.asr)),
+      RawPrayerInfo(PrayerType.ASR, asrMillis, sunsetTransitionMillis, format12h(entity.asr), formatMillis12h(sunsetTransitionMillis)),
+      RawPrayerInfo(PrayerType.MAGHRIB, maghribMillis, ishaMillis, format12h(entity.maghrib), format12h(entity.isha)),
+      RawPrayerInfo(PrayerType.ISHA, ishaMillis, tomorrowFajrMillis, format12h(entity.isha), format12h(entity.fajr))
     )
 
     val rawVoluntary = listOf(
-      RawPrayerInfo(PrayerType.ISHRAQ, ishraqMillis, duhaMillis, format12h(voluntaryTimes.ishraq)),
-      RawPrayerInfo(PrayerType.DUHA, duhaMillis, middayZenithMillis, format12h(voluntaryTimes.duha)),
-      RawPrayerInfo(PrayerType.TAHAJJUD, tahajjudTonightMillis, tomorrowFajrMillis, format12h(voluntaryTimes.tahajjud))
+      RawPrayerInfo(PrayerType.ISHRAQ, ishraqMillis, duhaMillis, format12h(voluntaryTimes.ishraq), format12h(voluntaryTimes.duha)),
+      RawPrayerInfo(PrayerType.DUHA, duhaMillis, middayZenithMillis, format12h(voluntaryTimes.duha), formatMillis12h(middayZenithMillis)),
+      RawPrayerInfo(PrayerType.TAHAJJUD, tahajjudTonightMillis, tomorrowFajrMillis, format12h(voluntaryTimes.tahajjud), formatMillis12h(tomorrowFajrMillis))
     )
 
     val fullTimeline = listOf(
-      RawPrayerInfo(PrayerType.TAHAJJUD, tahajjudEarlyMorningMillis, fajrMillis, format12h(voluntaryTimes.tahajjud)),
-      RawPrayerInfo(PrayerType.FAJR, fajrMillis, sunriseMillis, format12h(entity.fajr)),
-      RawPrayerInfo(PrayerType.ISHRAQ, ishraqMillis, duhaMillis, format12h(voluntaryTimes.ishraq)),
-      RawPrayerInfo(PrayerType.DUHA, duhaMillis, middayZenithMillis, format12h(voluntaryTimes.duha)),
-      RawPrayerInfo(PrayerType.DHUHR, dhuhrMillis, asrMillis, format12h(entity.dhuhr)),
-      RawPrayerInfo(PrayerType.ASR, asrMillis, sunsetTransitionMillis, format12h(entity.asr)),
-      RawPrayerInfo(PrayerType.MAGHRIB, maghribMillis, ishaMillis, format12h(entity.maghrib)),
-      RawPrayerInfo(PrayerType.ISHA, ishaMillis, tahajjudTonightMillis, format12h(entity.isha)),
-      RawPrayerInfo(PrayerType.TAHAJJUD, tahajjudTonightMillis, tomorrowFajrMillis, format12h(voluntaryTimes.tahajjud)),
-      RawPrayerInfo(PrayerType.FAJR, tomorrowFajrMillis, tomorrowFajrMillis + (sunriseMillis - fajrMillis), format12h(entity.fajr))
+      RawPrayerInfo(PrayerType.TAHAJJUD, tahajjudEarlyMorningMillis, fajrMillis, formatMillis12h(tahajjudEarlyMorningMillis), format12h(entity.fajr)),
+      RawPrayerInfo(PrayerType.FAJR, fajrMillis, sunriseMillis, format12h(entity.fajr), format12h(entity.sunrise)),
+      RawPrayerInfo(PrayerType.ISHRAQ, ishraqMillis, duhaMillis, format12h(voluntaryTimes.ishraq), format12h(voluntaryTimes.duha)),
+      RawPrayerInfo(PrayerType.DUHA, duhaMillis, middayZenithMillis, format12h(voluntaryTimes.duha), formatMillis12h(middayZenithMillis)),
+      RawPrayerInfo(PrayerType.DHUHR, dhuhrMillis, asrMillis, format12h(entity.dhuhr), format12h(entity.asr)),
+      RawPrayerInfo(PrayerType.ASR, asrMillis, sunsetTransitionMillis, format12h(entity.asr), formatMillis12h(sunsetTransitionMillis)),
+      RawPrayerInfo(PrayerType.MAGHRIB, maghribMillis, ishaMillis, format12h(entity.maghrib), format12h(entity.isha)),
+      RawPrayerInfo(PrayerType.ISHA, ishaMillis, tomorrowFajrMillis, format12h(entity.isha), format12h(entity.fajr)),
+      RawPrayerInfo(PrayerType.TAHAJJUD, tahajjudTonightMillis, tomorrowFajrMillis, format12h(voluntaryTimes.tahajjud), formatMillis12h(tomorrowFajrMillis)),
+      RawPrayerInfo(PrayerType.FAJR, tomorrowFajrMillis, tomorrowFajrMillis + (sunriseMillis - fajrMillis), format12h(entity.fajr), format12h(entity.sunrise))
     )
 
     val solar = SolarTimes(
@@ -425,7 +427,8 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
       middayZenithMillis = middayZenithMillis,
       sunsetTransitionMillis = sunsetTransitionMillis,
       tahajjudEarlyMillis = tahajjudEarlyMorningMillis,
-      tahajjudTonightMillis = tahajjudTonightMillis
+      tahajjudTonightMillis = tahajjudTonightMillis,
+      tomorrowFajrMillis = tomorrowFajrMillis
     )
     cachedDaySchedule = built
     return built
@@ -439,10 +442,22 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
 
     // 1. Determine Current Prayer (among ALL obligatory and voluntary prayers)
     val currentRaw: RawPrayerInfo? = when {
-      // If before early morning Tahajjud, it's still yesterday's Isha time
+      // If currently in early morning Tahajjud window
+      now in cached.tahajjudEarlyMillis until cached.fajrMillis -> {
+        cached.fullTimeline.firstOrNull { it.type == PrayerType.TAHAJJUD && now in it.timeMillis until it.endMillis }
+      }
+      // If before early morning Tahajjud, it's still yesterday's Isha time ending at today's Fajr
       now < cached.tahajjudEarlyMillis -> {
         val yesterdayIshaMillis = cached.ishaMillis - (24 * 3600 * 1000L)
-        RawPrayerInfo(PrayerType.ISHA, yesterdayIshaMillis, cached.tahajjudEarlyMillis, format12h(entity.isha))
+        RawPrayerInfo(PrayerType.ISHA, yesterdayIshaMillis, cached.fajrMillis, format12h(entity.isha), format12h(entity.fajr))
+      }
+      // If currently in tonight's Tahajjud window
+      now in cached.tahajjudTonightMillis until cached.tomorrowFajrMillis -> {
+        cached.fullTimeline.firstOrNull { it.type == PrayerType.TAHAJJUD && now in it.timeMillis until it.endMillis }
+      }
+      // If currently in tonight's regular Isha window (before Tahajjud tonight)
+      now in cached.ishaMillis until cached.tahajjudTonightMillis -> {
+        RawPrayerInfo(PrayerType.ISHA, cached.ishaMillis, cached.tomorrowFajrMillis, format12h(entity.isha), format12h(entity.fajr))
       }
       else -> {
         // Find if now is inside any prayer's active window [startMillis .. endMillis)
@@ -455,6 +470,8 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
         type = raw.type,
         timeFormatted = raw.formatted12h,
         timeMillis = raw.timeMillis,
+        endTimeFormatted = raw.endFormatted12h,
+        endTimeMillis = raw.endMillis,
         isPassed = false,
         isCurrent = true,
         isNext = false,
@@ -469,6 +486,8 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
         type = raw.type,
         timeFormatted = raw.formatted12h,
         timeMillis = raw.timeMillis,
+        endTimeFormatted = raw.endFormatted12h,
+        endTimeMillis = raw.endMillis,
         isPassed = false,
         isCurrent = false,
         isNext = true,
@@ -495,14 +514,20 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
     val activeForbidden = updatedForbidden.firstOrNull { it.isActiveNow }
     val effectiveCurrentItem: PrayerItem? = if (activeForbidden != null) null else currentItem
 
+    val isTahajjudActiveNow = (now in cached.tahajjudEarlyMillis until cached.fajrMillis) ||
+      (now in cached.tahajjudTonightMillis until cached.tomorrowFajrMillis)
+
     // 3. Map Obligatory Prayers list for UI
     val updatedObligatory = cached.obligatory.map { raw ->
       val isPassed = when (raw.type) {
         PrayerType.FAJR -> now >= cached.sunriseMillis // Fajr ends strictly at sunrise!
         PrayerType.ASR -> now >= cached.sunsetTransitionMillis // Asr ends at sunset transition!
-        PrayerType.ISHA -> now in cached.tahajjudEarlyMillis until cached.ishaMillis
+        PrayerType.ISHA -> {
+          if (now < cached.fajrMillis) false else now in cached.fajrMillis until cached.ishaMillis // Isha ends strictly when Fajr starts!
+        }
         else -> now >= raw.endMillis
       }
+      val isMakruh = (raw.type == PrayerType.ISHA) && isTahajjudActiveNow
       val isCurrent = effectiveCurrentItem?.type == raw.type
       val isNext = nextItem?.type == raw.type
 
@@ -510,9 +535,12 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
         type = raw.type,
         timeFormatted = raw.formatted12h,
         timeMillis = raw.timeMillis,
+        endTimeFormatted = raw.endFormatted12h,
+        endTimeMillis = raw.endMillis,
         isPassed = isPassed,
         isCurrent = isCurrent,
         isNext = isNext,
+        isMakruh = isMakruh,
         notificationEnabled = enabledSet.contains(raw.type.displayName)
       )
     }
@@ -521,6 +549,10 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
     val updatedVoluntary = cached.voluntary.map { raw ->
       val isTahajjud = raw.type == PrayerType.TAHAJJUD
       val displayMillis = if (isTahajjud && now < cached.fajrMillis) cached.tahajjudEarlyMillis else raw.timeMillis
+      val displayEndMillis = if (isTahajjud && now < cached.fajrMillis) cached.fajrMillis else raw.endMillis
+      val displayFormatted = if (isTahajjud && now < cached.fajrMillis) formatMillis12h(cached.tahajjudEarlyMillis) else raw.formatted12h
+      val displayEndFormatted = if (isTahajjud && now < cached.fajrMillis) format12h(entity.fajr) else raw.endFormatted12h
+
       val isPassed = when (raw.type) {
         PrayerType.DUHA -> now >= cached.middayZenithMillis // Duha ends at midday solar zenith!
         PrayerType.TAHAJJUD -> now in cached.fajrMillis until cached.tahajjudTonightMillis
@@ -531,8 +563,10 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
 
       PrayerItem(
         type = raw.type,
-        timeFormatted = raw.formatted12h,
+        timeFormatted = displayFormatted,
         timeMillis = displayMillis,
+        endTimeFormatted = displayEndFormatted,
+        endTimeMillis = displayEndMillis,
         isPassed = isPassed,
         isCurrent = isCurrent,
         isNext = isNext,

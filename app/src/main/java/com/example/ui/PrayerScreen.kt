@@ -1,13 +1,23 @@
 package com.example.ui
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
@@ -33,6 +43,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BatterySaver
 import androidx.compose.material.icons.filled.Brightness4
+import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
@@ -111,9 +123,11 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -125,6 +139,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.BuildConfig
+import com.example.R
 import com.example.data.model.CityLocation
 import com.example.data.model.ForbiddenTimeItem
 import com.example.data.model.PrayerItem
@@ -132,6 +147,7 @@ import com.example.data.model.PrayerType
 import com.example.data.model.SolarTimes
 import com.example.update.AppUpdateManager
 import com.example.util.AppLanguageHelper
+import com.example.util.HijriDateHelper
 import com.example.util.QiblaHelper
 import java.util.Date
 import kotlinx.coroutines.flow.StateFlow
@@ -167,6 +183,7 @@ fun PrayerScreen(
   var showQiblaCompass by remember { mutableStateOf(false) }
   var showThemeDialog by remember { mutableStateOf(false) }
   var showLanguageDialog by remember { mutableStateOf(false) }
+  var showHijriCalendarDialog by remember { mutableStateOf(false) }
 
   // Check Location Permission State
   var hasLocationPermission by remember {
@@ -277,6 +294,10 @@ fun PrayerScreen(
             coroutineScope.launch { drawerState.close() }
             showQiblaCompass = true
           },
+          onOpenHijriCalendar = {
+            coroutineScope.launch { drawerState.close() }
+            showHijriCalendarDialog = true
+          },
           onOpenTheme = {
             coroutineScope.launch { drawerState.close() }
             showThemeDialog = true
@@ -284,6 +305,17 @@ fun PrayerScreen(
           onCheckUpdates = {
             coroutineScope.launch { drawerState.close() }
             viewModel.checkForAppUpdates(silent = false)
+          },
+          onReportBug = {
+            coroutineScope.launch { drawerState.close() }
+            try {
+              val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://forms.gle/kCME696PmqznV4LY8")).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+              }
+              context.startActivity(intent)
+            } catch (e: Exception) {
+              // Fallback
+            }
           },
           onTestNotification = {
             coroutineScope.launch { drawerState.close() }
@@ -325,9 +357,6 @@ fun PrayerScreen(
             }
           },
           title = {
-            val todayFormatted = remember(uiState.appLanguage) {
-              AppLanguageHelper.formatFormattedDate(Date(), uiState.appLanguage)
-            }
             Column(modifier = Modifier.padding(end = 4.dp)) {
               Text(
                 text = "My Own Prayer", // App Name MUST NEVER CHANGE
@@ -336,12 +365,9 @@ fun PrayerScreen(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
               )
-              Text(
-                text = todayFormatted,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+              AnimatedDateHeader(
+                appLanguage = uiState.appLanguage,
+                onDateClick = { showHijriCalendarDialog = true }
               )
             }
           },
@@ -406,7 +432,7 @@ fun PrayerScreen(
                 .testTag("city_select_button")
             ) {
               Row(
-                modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
                 verticalAlignment = Alignment.CenterVertically
               ) {
                 Icon(
@@ -427,6 +453,8 @@ fun PrayerScreen(
                 )
               }
             }
+
+            Spacer(modifier = Modifier.width(12.dp))
           }
         )
       }
@@ -945,6 +973,14 @@ fun PrayerScreen(
         showCityDialog = false
       },
       onDismiss = { showCityDialog = false }
+    )
+  }
+
+  // Hijri Calendar Dialog
+  if (showHijriCalendarDialog) {
+    HijriCalendarDialog(
+      appLanguage = uiState.appLanguage,
+      onDismiss = { showHijriCalendarDialog = false }
     )
   }
 
@@ -1707,6 +1743,11 @@ fun NextPrayerHeroCard(
 
   val topTimeFormatted = when {
     isForbidden -> AppLanguageHelper.localizeInterval(activeForbiddenTime!!.intervalFormatted, appLanguage)
+    topPrayer?.endTimeFormatted != null -> {
+      val start = AppLanguageHelper.localizeTime(topPrayer.timeFormatted, appLanguage)
+      val end = AppLanguageHelper.localizeTime(topPrayer.endTimeFormatted, appLanguage)
+      "$start - $end"
+    }
     else -> AppLanguageHelper.localizeTime(topPrayer?.timeFormatted ?: "--:--", appLanguage)
   }
 
@@ -1843,6 +1884,20 @@ fun NextPrayerHeroCard(
               softWrap = false
             )
 
+            if (!isForbidden && !showUpcomingOnTop && topPrayer?.type == PrayerType.TAHAJJUD) {
+              Spacer(modifier = Modifier.height(3.dp))
+              Text(
+                text = "• ${AppLanguageHelper.getString("isha_makruh_hero", appLanguage)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFFFEF08A),
+                fontWeight = FontWeight.Medium,
+                fontSize = 12.sp,
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE)
+              )
+            }
+
             if (isForbidden) {
               Spacer(modifier = Modifier.height(3.dp))
               Text(
@@ -1938,10 +1993,16 @@ fun NextPrayerHeroCard(
 
           if (bottomPrayer != null) {
             Spacer(modifier = Modifier.height(10.dp))
+            val isBottomIshaBeforeTahajjud = bottomPrayer.type == PrayerType.ISHA && nextPrayer?.type == PrayerType.TAHAJJUD
+            val secondaryStatusText = if (isBottomIshaBeforeTahajjud) {
+              AppLanguageHelper.getString("pray_soon", appLanguage)
+            } else {
+              AppLanguageHelper.getString("ending_soon", appLanguage)
+            }
             CompactSecondaryPrayerBar(
               label = AppLanguageHelper.getString("current_prefix", appLanguage).replace(":", "").trim(),
               prayer = bottomPrayer,
-              statusText = AppLanguageHelper.getString("ending_soon", appLanguage),
+              statusText = secondaryStatusText,
               appLanguage = appLanguage
             )
           }
@@ -2021,13 +2082,21 @@ private fun CompactUpcomingPrayerBar(
             softWrap = false,
             modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE)
           )
+          val timeDisplay = if (!prayer.endTimeFormatted.isNullOrEmpty()) {
+            val start = localizedTime
+            val end = AppLanguageHelper.localizeTime(prayer.endTimeFormatted, appLanguage)
+            "$start - $end"
+          } else {
+            localizedTime
+          }
           Text(
-            text = localizedTime.replace(" ", "\u00A0"),
+            text = timeDisplay.replace(" ", "\u00A0"),
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.SemiBold,
             color = Color(0xFFFDE047),
             maxLines = 1,
-            softWrap = false
+            softWrap = false,
+            modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE)
           )
         }
       }
@@ -2056,7 +2125,8 @@ private fun CompactUpcomingPrayerBar(
             color = Color(0xFFFDE047),
             letterSpacing = 0.3.sp,
             maxLines = 1,
-            softWrap = false
+            softWrap = false,
+            modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE)
           )
         }
       }
@@ -2106,13 +2176,20 @@ private fun CompactSecondaryPrayerBar(
           )
         }
         Spacer(modifier = Modifier.width(8.dp))
+        val timeDisplay = if (!prayer.endTimeFormatted.isNullOrEmpty()) {
+          val start = localizedTime
+          val end = AppLanguageHelper.localizeTime(prayer.endTimeFormatted, appLanguage)
+          "$start - $end"
+        } else {
+          localizedTime
+        }
         Text(
           text = buildAnnotatedString {
             append("$label: ")
             withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = Color.White)) {
               append(localizedName)
             }
-            append(" (${localizedTime.replace(" ", "\u00A0")})")
+            append(" (${timeDisplay.replace(" ", "\u00A0")})")
           },
           style = MaterialTheme.typography.bodySmall,
           color = Color(0xB3FFFFFF),
@@ -2390,8 +2467,25 @@ fun PrayerRowCard(
                 )
               }
             }
+            if (prayer.isMakruh) {
+              Spacer(modifier = Modifier.width(6.dp))
+              Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = Color(0xFFD97706)
+              ) {
+                Text(
+                  text = AppLanguageHelper.getString("makruh_badge", appLanguage),
+                  style = MaterialTheme.typography.labelSmall,
+                  color = Color.White,
+                  fontWeight = FontWeight.Bold,
+                  fontSize = 10.sp,
+                  modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+              }
+            }
           }
           val bottomText = when {
+            prayer.isMakruh -> AppLanguageHelper.getString("isha_makruh_desc", appLanguage)
             isCurrent -> "${AppLanguageHelper.getString("current_prayer_prefix", appLanguage)}$localizedDesc"
             localizedDesc.isNotEmpty() -> if (isPassed) "${AppLanguageHelper.getString("passed_prefix", appLanguage)}$localizedDesc" else localizedDesc
             isPassed -> AppLanguageHelper.getString("passed_label", appLanguage)
@@ -2419,14 +2513,30 @@ fun PrayerRowCard(
       Row(
         verticalAlignment = Alignment.CenterVertically
       ) {
-        Text(
-          text = localizedTime.replace(" ", "\u00A0"),
-          style = MaterialTheme.typography.titleMedium,
-          fontWeight = FontWeight.Bold,
-          color = textColor,
-          maxLines = 1,
-          softWrap = false
-        )
+        Column(
+          horizontalAlignment = Alignment.End
+        ) {
+          Text(
+            text = localizedTime.replace(" ", "\u00A0"),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = textColor,
+            maxLines = 1,
+            softWrap = false
+          )
+          if (!prayer.endTimeFormatted.isNullOrEmpty()) {
+            val localizedEndTime = AppLanguageHelper.localizeTime(prayer.endTimeFormatted, appLanguage)
+            Text(
+              text = "${AppLanguageHelper.getString("ends_at_label", appLanguage)} $localizedEndTime".replace(" ", "\u00A0"),
+              style = MaterialTheme.typography.labelSmall,
+              color = textColor.copy(alpha = if (isPassed) 0.55f else 0.75f),
+              fontSize = 10.sp,
+              fontWeight = FontWeight.Medium,
+              maxLines = 1,
+              softWrap = false
+            )
+          }
+        }
 
         Spacer(modifier = Modifier.width(6.dp))
         Box(
@@ -2709,8 +2819,10 @@ fun PrayerSideMenuContent(
   onOpenCitySelector: () -> Unit,
   onDetectGps: () -> Unit,
   onOpenQibla: () -> Unit,
+  onOpenHijriCalendar: () -> Unit,
   onOpenTheme: () -> Unit,
   onCheckUpdates: () -> Unit,
+  onReportBug: () -> Unit,
   onTestNotification: () -> Unit,
   onCloseDrawer: () -> Unit
 ) {
@@ -2726,46 +2838,48 @@ fun PrayerSideMenuContent(
       .fillMaxSize()
       .padding(16.dp)
   ) {
-    // Top App Branding & Mosque Header
+    // Top App Branding & Location Header
     Surface(
       shape = RoundedCornerShape(20.dp),
       color = MaterialTheme.colorScheme.primaryContainer,
       modifier = Modifier.fillMaxWidth()
     ) {
-      Row(
-        modifier = Modifier.padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically
+      Column(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 18.dp, vertical = 14.dp)
       ) {
-        Box(
-          modifier = Modifier
-            .size(46.dp)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.primary),
-          contentAlignment = Alignment.Center
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-          Icon(
-            imageVector = Icons.Default.Explore,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onPrimary,
-            modifier = Modifier.size(24.dp)
-          )
-        }
-        Spacer(modifier = Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
           Text(
             text = "My Own Prayer", // App Name MUST NEVER CHANGE
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onPrimaryContainer
           )
-          Text(
-            text = "${uiState.currentCity.name}, ${uiState.currentCity.country}",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-          )
+          Surface(
+            shape = RoundedCornerShape(6.dp),
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+          ) {
+            Text(
+              text = "Beta",
+              style = MaterialTheme.typography.labelSmall,
+              fontWeight = FontWeight.Bold,
+              color = MaterialTheme.colorScheme.primary,
+              modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+            )
+          }
         }
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+          text = "${uiState.currentCity.name}, ${uiState.currentCity.country}",
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis
+        )
       }
     }
 
@@ -2930,7 +3044,51 @@ fun PrayerSideMenuContent(
         )
       }
 
-      // 6. Theme & Appearance
+      // 6. Hijri Calendar
+      item(key = "drawer_hijri_calendar") {
+        NavigationDrawerItem(
+          icon = {
+            Icon(
+              imageVector = Icons.Default.CalendarMonth,
+              contentDescription = "Hijri Calendar",
+              tint = MaterialTheme.colorScheme.primary
+            )
+          },
+          label = {
+            Column {
+              Text(
+                text = AppLanguageHelper.getString("hijri_calendar", lang),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold
+              )
+              Text(
+                text = AppLanguageHelper.getString("hijri_calendar_sub", lang),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+              )
+            }
+          },
+          badge = {
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+            ) {
+              Text(
+                text = AppLanguageHelper.getString("synced_live", lang),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+              )
+            }
+          },
+          selected = false,
+          onClick = onOpenHijriCalendar,
+          modifier = Modifier.testTag("drawer_item_hijri_calendar")
+        )
+      }
+
+      // 7. Theme & Appearance
       item(key = "drawer_theme") {
         NavigationDrawerItem(
           icon = {
@@ -2974,7 +3132,37 @@ fun PrayerSideMenuContent(
         )
       }
 
-      // 8. Test Prayer Notification
+      // 8. Report a Bug
+      item(key = "drawer_report_bug") {
+        NavigationDrawerItem(
+          icon = {
+            Icon(
+              imageVector = Icons.Default.BugReport,
+              contentDescription = "Report a bug",
+              tint = MaterialTheme.colorScheme.primary
+            )
+          },
+          label = {
+            Column {
+              Text(
+                text = AppLanguageHelper.getString("report_bug", lang),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold
+              )
+              Text(
+                text = AppLanguageHelper.getString("report_bug_sub", lang),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+              )
+            }
+          },
+          selected = false,
+          onClick = onReportBug,
+          modifier = Modifier.testTag("drawer_item_report_bug")
+        )
+      }
+
+      // 9. Test Prayer Notification
       item(key = "drawer_test_notif") {
         NavigationDrawerItem(
           icon = {
@@ -3223,4 +3411,81 @@ fun ThemeSelectionDialog(
       }
     }
   )
+}
+
+/**
+ * Animated date header displaying Gregorian and Hijri dates with smooth vertical transition.
+ */
+@Composable
+private fun AnimatedDateHeader(
+  appLanguage: String,
+  onDateClick: () -> Unit,
+  modifier: Modifier = Modifier
+) {
+  var showHijri by remember { mutableStateOf(false) }
+  val context = LocalContext.current
+
+  // Periodically flip between Gregorian and Hijri date every 4.5 seconds
+  LaunchedEffect(Unit) {
+    while (true) {
+      kotlinx.coroutines.delay(4500)
+      showHijri = !showHijri
+    }
+  }
+
+  val todayDate = remember { Date() }
+  val adjustmentDays = remember { HijriDateHelper.getAdjustment(context) }
+  val gregorianFormatted = remember(appLanguage, todayDate) {
+    HijriDateHelper.formatGregorianDate(todayDate, appLanguage)
+  }
+  val hijriFormatted = remember(appLanguage, todayDate, adjustmentDays) {
+    val h = HijriDateHelper.getHijriDate(todayDate, adjustmentDays)
+    HijriDateHelper.formatHijriDate(h, appLanguage)
+  }
+
+  Row(
+    verticalAlignment = Alignment.CenterVertically,
+    modifier = modifier
+      .clip(RoundedCornerShape(6.dp))
+      .clickable {
+        showHijri = !showHijri
+        onDateClick()
+      }
+      .padding(vertical = 1.dp)
+      .testTag("top_date_header_switcher")
+  ) {
+    AnimatedContent(
+      targetState = showHijri,
+      transitionSpec = {
+        if (targetState) {
+          (slideInVertically { height -> height } + fadeIn(animationSpec = tween(450)))
+            .togetherWith(slideOutVertically { height -> -height } + fadeOut(animationSpec = tween(450)))
+        } else {
+          (slideInVertically { height -> -height } + fadeIn(animationSpec = tween(450)))
+            .togetherWith(slideOutVertically { height -> height } + fadeOut(animationSpec = tween(450)))
+        }
+      },
+      label = "date_switcher"
+    ) { isHijri ->
+      Row(
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Icon(
+          imageVector = if (isHijri) Icons.Default.DarkMode else Icons.Default.CalendarMonth,
+          contentDescription = null,
+          tint = if (isHijri) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+          modifier = Modifier.size(13.dp)
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+          text = if (isHijri) hijriFormatted else gregorianFormatted,
+          style = MaterialTheme.typography.bodySmall,
+          color = if (isHijri) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+          fontWeight = if (isHijri) FontWeight.SemiBold else FontWeight.Normal,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis
+        )
+      }
+    }
+  }
 }

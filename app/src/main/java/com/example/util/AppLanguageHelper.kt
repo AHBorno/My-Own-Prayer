@@ -386,6 +386,7 @@ object AppLanguageHelper {
       "current_prefix" -> when (lang) { LANG_BN -> "চলতি: "; LANG_AR -> "الحالية: "; else -> "Current: " }
       "in_prefix" -> when (lang) { LANG_BN -> "বাকি "; LANG_AR -> "خلال "; else -> "in " }
       "ending_soon" -> when (lang) { LANG_BN -> "ওয়াক্ত শেষ হতে চলেছে"; LANG_AR -> "ينتهي قريباً"; else -> "Ending soon" }
+      "pray_soon" -> when (lang) { LANG_BN -> "দ্রুত আদায় করুন"; LANG_AR -> "صَلِّ قريباً"; else -> "Pray soon" }
       "time_remaining" -> when (lang) { LANG_BN -> "অবশিষ্ট সময়"; LANG_AR -> "الوقت المتبقي"; else -> "Time Remaining" }
 
       // Sections & Cards
@@ -396,7 +397,7 @@ object AppLanguageHelper {
       "sun_schedule_badge" -> when (lang) { LANG_BN -> "সৌর সময়সূচি"; LANG_AR -> "مواقيت الشمس"; else -> "Sun Schedule" }
       "sunrise" -> when (lang) { LANG_BN -> "সূর্যোদয়"; LANG_AR -> "الشروق"; else -> "Sunrise" }
       "sunset" -> when (lang) { LANG_BN -> "সূর্যাস্ত"; LANG_AR -> "الغروب"; else -> "Sunset" }
-      "voluntary_prayers_title" -> when (lang) { LANG_BN -> "সুন্নত ও নফল সালাত (নওয়াফিল)"; LANG_AR -> "السنن والنوافل"; else -> "Voluntary & Sunnah (Nawafil)" }
+      "voluntary_prayers_title" -> when (lang) { LANG_BN -> "সুন্নত ও নফল সালাত (নফল)"; LANG_AR -> "السنن والنوافل"; else -> "Voluntary & Sunnah (Nawafil)" }
       "voluntary_prayers_subtitle" -> when (lang) { LANG_BN -> "ইশরাক, চাশত (দুহা) ও তাহাজ্জুদ"; LANG_AR -> "الإشراق والضحى وقيام الليل"; else -> "Ishraq, Duha & Tahajjud night vigil" }
       "sunnah_badge" -> when (lang) { LANG_BN -> "সুন্নত"; LANG_AR -> "سنة"; else -> "Sunnah" }
       "forbidden_prayers_title" -> when (lang) { LANG_BN -> "সালাত আদায় নিষিদ্ধ সময়"; LANG_AR -> "أوقات كراهة الصلاة"; else -> "Forbidden Prayer Times" }
@@ -411,9 +412,14 @@ object AppLanguageHelper {
       "now_badge" -> when (lang) { LANG_BN -> "এখন"; LANG_AR -> "الآن"; else -> "NOW" }
       "next_badge" -> when (lang) { LANG_BN -> "পরবর্তী"; LANG_AR -> "التالي"; else -> "NEXT" }
       "current_badge" -> when (lang) { LANG_BN -> "চলতি"; LANG_AR -> "الحالي"; else -> "CURRENT" }
+      "makruh_badge" -> when (lang) { LANG_BN -> "মাকরূহ"; LANG_AR -> "مكروه"; else -> "Makruh" }
       "passed_label" -> when (lang) { LANG_BN -> "ওয়াক্ত অতিক্রান্ত"; LANG_AR -> "مضت"; else -> "Passed" }
       "passed_prefix" -> when (lang) { LANG_BN -> "অতিক্রান্ত • "; LANG_AR -> "مضت • "; else -> "Passed • " }
       "current_prayer_prefix" -> when (lang) { LANG_BN -> "চলতি ওয়াক্ত • "; LANG_AR -> "الوقت الحالي • "; else -> "Current Prayer • " }
+      "ends_at_label" -> when (lang) { LANG_BN -> "শেষ:"; LANG_AR -> "ينتهي:"; else -> "Ends:" }
+      "ends_at_prefix" -> when (lang) { LANG_BN -> "শেষ • "; LANG_AR -> "ينتهي • "; else -> "Ends • " }
+      "isha_makruh_hero" -> when (lang) { LANG_BN -> "পাশাপাশি এশা (মাকরূহ)"; LANG_AR -> "وأيضاً العشاء (مكروه)"; else -> "Also Isha (Makruh)" }
+      "isha_makruh_desc" -> when (lang) { LANG_BN -> "তাহাজ্জুদ চলাকালে এশার ওয়াক্ত মাকরূহ কিন্তু ফজর পর্যন্ত আদায় করা যাবে"; LANG_AR -> "وقت العشاء مكروه أثناء التهجد ولكن يصح أداؤها حتى الفجر"; else -> "Isha is valid until Fajr, but delayed past midnight/Tahajjud is Makruh" }
 
       // City Dialog
       "select_location" -> when (lang) { LANG_BN -> "শহর ও অবস্থান নির্বাচন"; LANG_AR -> "تحديد الموقع والمدينة"; else -> "Select Location" }
@@ -423,6 +429,19 @@ object AppLanguageHelper {
       "world_cities" -> when (lang) { LANG_BN -> "বিশ্বের শহরসমূহ"; LANG_AR -> "مدن العالم"; else -> "World Cities" }
       "filtered" -> when (lang) { LANG_BN -> "ফিল্টারকৃত"; LANG_AR -> "مصفاة"; else -> "Filtered" }
       "no_cities_found" -> when (lang) { LANG_BN -> "কোনো শহর পাওয়া যায়নি"; LANG_AR -> "لم يتم العثور على مدن"; else -> "No cities found" }
+
+      // Hijri Calendar
+      "hijri_calendar" -> when (lang) { LANG_BN -> "হিজরি ক্যালেন্ডার"; LANG_AR -> "التقويم الهجري"; else -> "Hijri Calendar" }
+      "hijri_calendar_sub" -> when (lang) { LANG_BN -> "ইসলামিক দিন ও লাইভ ওয়েব সিঙ্ক"; LANG_AR -> "التقويم الإسلامي والأيام المباركة"; else -> "Islamic dates & live web sync" }
+      "hijri_calendar_title" -> when (lang) { LANG_BN -> "হিজরি ক্যালেন্ডার"; LANG_AR -> "التقويم الهجري"; else -> "Hijri Calendar" }
+      "hijri_calendar_subtitle" -> when (lang) { LANG_BN -> "ইসলামিক ক্যালেন্ডার ও গুরুত্বপূর্ণ দিনসমূহ"; LANG_AR -> "التقويم الإسلامي والمناسبات الدينية"; else -> "Islamic calendar & important dates" }
+      "white_days" -> when (lang) { LANG_BN -> "আইয়ামে বিজ (সাদা দিনসমূহ - নফল রোজা)"; LANG_AR -> "الأيام البيض (صيام مستحب)"; else -> "Ayyam al-Beed (White Days Fasting)" }
+      "moon_adjustment" -> when (lang) { LANG_BN -> "চাঁদ দেখার সমন্বয় (দিন):"; LANG_AR -> "تعديل رؤية الهلال:"; else -> "Moon Sighting Adj (days):" }
+      "synced_live" -> when (lang) { LANG_BN -> "ওয়েব সিঙ্ক"; LANG_AR -> "محدث مباشر"; else -> "Web Sync" }
+      "today_button" -> when (lang) { LANG_BN -> "আজ"; LANG_AR -> "اليوم"; else -> "Today" }
+      "day_suffix" -> when (lang) { LANG_BN -> "হিজরি"; LANG_AR -> "هـ"; else -> "AH" }
+      "gregorian" -> when (lang) { LANG_BN -> "ইংরেজি"; LANG_AR -> "ميلادي"; else -> "Gregorian" }
+      "hijri" -> when (lang) { LANG_BN -> "হিজরি"; LANG_AR -> "هجري"; else -> "Hijri" }
 
       // Qibla Dialog
       "qibla_compass_title" -> when (lang) { LANG_BN -> "কিবলার দিক ও কাবার কম্পাস"; LANG_AR -> "اتجاه القبلة والبوصلة"; else -> "Qibla Direction & Kaaba Compass" }
@@ -463,6 +482,8 @@ object AppLanguageHelper {
       }
       "update_now" -> when (lang) { LANG_BN -> "এখনই আপডেট করুন"; LANG_AR -> "تحديث الآن"; else -> "Update Now" }
       "view_notes" -> when (lang) { LANG_BN -> "রিলিজ নোট"; LANG_AR -> "عرض الملاحظات"; else -> "View Notes" }
+      "report_bug" -> when (lang) { LANG_BN -> "বাগ বা সমস্যা রিপোর্ট করুন"; LANG_AR -> "الإبلاغ عن خطأ"; else -> "Report a bug" }
+      "report_bug_sub" -> when (lang) { LANG_BN -> "মতামত জানান বা সমস্যা রিপোর্ট করুন"; LANG_AR -> "شاركنا رأيك أو أبلغ عن مشكلة"; else -> "Share feedback or report an issue" }
 
       // Testing verification section
       "verify_notif_title" -> when (lang) { LANG_BN -> "ব্যাকগ্রাউন্ড-মুক্ত নোটিফিকেশন পরীক্ষা"; LANG_AR -> "اختبار إشعارات توفير البطارية"; else -> "Verify Background-Free Notifications" }

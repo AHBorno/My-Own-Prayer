@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -26,6 +28,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Brightness4
+import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Explore
@@ -57,11 +62,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.util.AppLanguageHelper
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -75,7 +84,9 @@ fun SideMenuDrawerContent(
   onRefresh: () -> Unit,
   onOpenCityDialog: () -> Unit,
   onOpenQibla: () -> Unit,
+  onOpenHijriCalendar: () -> Unit,
   onCheckUpdates: () -> Unit,
+  onReportBug: () -> Unit = {},
   onTestNotification: () -> Unit,
   onClose: () -> Unit,
   modifier: Modifier = Modifier
@@ -110,39 +121,38 @@ fun SideMenuDrawerContent(
             )
             .padding(top = 40.dp, bottom = 20.dp, start = 20.dp, end = 20.dp)
         ) {
-          Column {
+          Column(
+            modifier = Modifier.fillMaxWidth()
+          ) {
             Row(
-              verticalAlignment = Alignment.CenterVertically
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-              Box(
-                modifier = Modifier
-                  .size(46.dp)
-                  .clip(CircleShape)
-                  .background(Color(0xFFFDE047).copy(alpha = 0.2f)),
-                contentAlignment = Alignment.Center
+              Text(
+                text = AppLanguageHelper.getString("app_name", lang),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+              )
+              Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = Color(0xFFFDE047).copy(alpha = 0.25f)
               ) {
-                Icon(
-                  imageVector = Icons.Default.Mosque,
-                  contentDescription = null,
-                  tint = Color(0xFFFDE047),
-                  modifier = Modifier.size(28.dp)
-                )
-              }
-              Spacer(modifier = Modifier.width(12.dp))
-              Column {
                 Text(
-                  text = AppLanguageHelper.getString("app_name", lang),
-                  style = MaterialTheme.typography.titleLarge,
+                  text = "Beta",
+                  style = MaterialTheme.typography.labelSmall,
                   fontWeight = FontWeight.Bold,
-                  color = Color.White
-                )
-                Text(
-                  text = uiState.currentCity.name + ", " + uiState.currentCity.country,
-                  style = MaterialTheme.typography.bodySmall,
-                  color = Color(0xFFD1FAE5)
+                  color = Color(0xFFFDE047),
+                  modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                 )
               }
             }
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+              text = uiState.currentCity.name + ", " + uiState.currentCity.country,
+              style = MaterialTheme.typography.bodySmall,
+              color = Color(0xFFD1FAE5)
+            )
 
             Spacer(modifier = Modifier.height(14.dp))
             val dateStr = remember {
@@ -368,6 +378,16 @@ fun SideMenuDrawerContent(
       // 5. Quick Tools & Navigation
       item {
         DrawerActionItem(
+          icon = Icons.Default.CalendarMonth,
+          title = AppLanguageHelper.getString("hijri_calendar", lang),
+          subtitle = AppLanguageHelper.getString("hijri_calendar_sub", lang),
+          onClick = onOpenHijriCalendar,
+          testTag = "drawer_hijri_calendar_button"
+        )
+      }
+
+      item {
+        DrawerActionItem(
           icon = Icons.Default.Explore,
           title = AppLanguageHelper.getString("qibla_compass", lang),
           subtitle = "Accurate Kaaba direction",
@@ -400,9 +420,19 @@ fun SideMenuDrawerContent(
         DrawerActionItem(
           icon = Icons.Default.SystemUpdate,
           title = AppLanguageHelper.getString("check_updates", lang),
-          subtitle = "v1.0 Beta",
+          subtitle = "v${com.example.BuildConfig.VERSION_NAME}",
           onClick = onCheckUpdates,
           testTag = "drawer_check_update_button"
+        )
+      }
+
+      item {
+        DrawerActionItem(
+          icon = Icons.Default.BugReport,
+          title = AppLanguageHelper.getString("report_bug", lang),
+          subtitle = AppLanguageHelper.getString("report_bug_sub", lang),
+          onClick = onReportBug,
+          testTag = "drawer_report_bug_button"
         )
       }
 
@@ -416,7 +446,7 @@ fun SideMenuDrawerContent(
           horizontalAlignment = Alignment.CenterHorizontally
         ) {
           Text(
-            text = "My Own Prayer • v1.0 Beta",
+            text = "My Own Prayer • v${com.example.BuildConfig.VERSION_NAME}",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
           )

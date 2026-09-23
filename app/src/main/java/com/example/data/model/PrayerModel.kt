@@ -40,9 +40,12 @@ data class PrayerItem(
   val type: PrayerType,
   val timeFormatted: String, // e.g. "05:12 AM"
   val timeMillis: Long,       // Epoch millis today
+  val endTimeFormatted: String? = null, // e.g. "05:47 AM"
+  val endTimeMillis: Long? = null,
   val isPassed: Boolean = false,
   val isCurrent: Boolean = false,
   val isNext: Boolean = false,
+  val isMakruh: Boolean = false,
   val notificationEnabled: Boolean = true
 )
 
