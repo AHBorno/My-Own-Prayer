@@ -30,6 +30,7 @@ data class PrayerUiState(
   val solarTimes: SolarTimes = SolarTimes(),
   val forbiddenTimes: List<ForbiddenTimeItem> = emptyList(),
   val currentPrayer: PrayerItem? = null,
+  val activeForbiddenTime: ForbiddenTimeItem? = null,
   val nextPrayer: PrayerItem? = null,
   val isCloseToNextPrayer: Boolean = false,
   val isPreviewCloseMode: Boolean = false,
@@ -43,13 +44,20 @@ data class PrayerUiState(
   val isBatteryOptimizedMode: Boolean = true,
   val appUpdateInfo: AppUpdateInfo? = null,
   val isCheckingUpdate: Boolean = false,
-  val showUpdateDialog: Boolean = false
+  val showUpdateDialog: Boolean = false,
+  val appLanguage: String = "en",
+  val appTheme: String = "system"
 )
 
 class PrayerViewModel(application: Application) : AndroidViewModel(application) {
   private val repository = PrayerRepository(application)
 
-  private val _uiState = MutableStateFlow(PrayerUiState())
+  private val _uiState = MutableStateFlow(
+    PrayerUiState(
+      appLanguage = repository.getAppLanguage(),
+      appTheme = repository.getAppTheme()
+    )
+  )
   val uiState: StateFlow<PrayerUiState> = _uiState.asStateFlow()
 
   private val _countdownText = MutableStateFlow("--:--:--")
@@ -59,7 +67,13 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
 
   init {
     val savedCity = repository.getSelectedCity()
-    _uiState.update { it.copy(currentCity = savedCity) }
+    _uiState.update {
+      it.copy(
+        currentCity = savedCity,
+        appLanguage = repository.getAppLanguage(),
+        appTheme = repository.getAppTheme()
+      )
+    }
 
     // Observe Room database for today's prayer times
     viewModelScope.launch {
@@ -129,6 +143,32 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
 
   fun openUpdateDialog() {
     _uiState.update { it.copy(showUpdateDialog = true) }
+  }
+
+  fun setLanguage(lang: String) {
+    repository.setAppLanguage(lang)
+    com.example.util.AppLanguageHelper.setLanguage(getApplication(), lang)
+    _uiState.update { it.copy(appLanguage = lang) }
+    currentEntity?.let { entity ->
+      PrayerAlarmScheduler.scheduleAlarmsForToday(
+        getApplication(),
+        entity,
+        repository.getEnabledPrayers(),
+        repository.getEnabledForbiddenTimes()
+      )
+      updatePrayerList(entity)
+    }
+  }
+
+  fun setTheme(theme: String) {
+    repository.setAppTheme(theme)
+    _uiState.update { it.copy(appTheme = theme) }
+  }
+
+  fun triggerTestNotification(prayerName: String = "Maghrib") {
+    repository.triggerImmediateTestNotification(prayerName)
+    val msg = com.example.util.AppLanguageHelper.getString("test_notification_sent", _uiState.value.appLanguage)
+    _uiState.update { it.copy(testMessage = msg) }
   }
 
   fun syncToday(city: CityLocation = _uiState.value.currentCity) {
@@ -233,11 +273,14 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
   private data class RawPrayerInfo(
     val type: PrayerType,
     val timeMillis: Long,
+    val endMillis: Long,
     val formatted12h: String
   )
 
   private data class ForbiddenInterval(
     val name: String,
+    val arabicName: String = "",
+    val bengaliName: String = "",
     val intervalFormatted: String,
     val description: String,
     val startMillis: Long,
@@ -248,9 +291,22 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
     val entityKey: String,
     val obligatory: List<RawPrayerInfo>,
     val voluntary: List<RawPrayerInfo>,
+    val fullTimeline: List<RawPrayerInfo>,
     val solar: SolarTimes,
     val forbiddenIntervals: List<ForbiddenInterval>,
-    val lastSyncFormatted: String
+    val lastSyncFormatted: String,
+    val sunriseMillis: Long,
+    val dhuhrMillis: Long,
+    val asrMillis: Long,
+    val maghribMillis: Long,
+    val ishaMillis: Long,
+    val fajrMillis: Long,
+    val ishraqMillis: Long,
+    val duhaMillis: Long,
+    val middayZenithMillis: Long,
+    val sunsetTransitionMillis: Long,
+    val tahajjudEarlyMillis: Long,
+    val tahajjudTonightMillis: Long
   )
 
   private var cachedDaySchedule: CachedDaySchedule? = null
@@ -263,24 +319,52 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     val todayDate = entity.date
+    val fajrMillis = PrayerAlarmScheduler.parsePrayerTimeToMillis(todayDate, entity.fajr)
     val sunriseMillis = PrayerAlarmScheduler.parsePrayerTimeToMillis(todayDate, entity.sunrise)
     val dhuhrMillis = PrayerAlarmScheduler.parsePrayerTimeToMillis(todayDate, entity.dhuhr)
+    val asrMillis = PrayerAlarmScheduler.parsePrayerTimeToMillis(todayDate, entity.asr)
     val maghribMillis = PrayerAlarmScheduler.parsePrayerTimeToMillis(todayDate, entity.maghrib)
+    val ishaMillis = PrayerAlarmScheduler.parsePrayerTimeToMillis(todayDate, entity.isha)
 
     val voluntaryTimes = PrayerAlarmScheduler.computeVoluntaryTimes(entity)
+    val ishraqMillis = sunriseMillis + (15 * 60 * 1000L)
+    val duhaMillis = PrayerAlarmScheduler.parsePrayerTimeToMillis(todayDate, voluntaryTimes.duha)
+    val middayZenithMillis = dhuhrMillis - (15 * 60 * 1000L)
+    val sunsetTransitionMillis = maghribMillis - (15 * 60 * 1000L)
+
+    val tomorrowFajrMillis = fajrMillis + (24 * 3600 * 1000L)
+    val nightDurationTonight = (tomorrowFajrMillis - maghribMillis).coerceAtLeast(6 * 3600 * 1000L)
+    val tahajjudTonightMillis = tomorrowFajrMillis - (nightDurationTonight / 3)
+
+    val yesterdayMaghribMillis = maghribMillis - (24 * 3600 * 1000L)
+    val nightDurationEarly = (fajrMillis - yesterdayMaghribMillis).coerceAtLeast(6 * 3600 * 1000L)
+    val tahajjudEarlyMorningMillis = fajrMillis - (nightDurationEarly / 3)
 
     val rawObligatory = listOf(
-      RawPrayerInfo(PrayerType.FAJR, PrayerAlarmScheduler.parsePrayerTimeToMillis(todayDate, entity.fajr), format12h(entity.fajr)),
-      RawPrayerInfo(PrayerType.DHUHR, dhuhrMillis, format12h(entity.dhuhr)),
-      RawPrayerInfo(PrayerType.ASR, PrayerAlarmScheduler.parsePrayerTimeToMillis(todayDate, entity.asr), format12h(entity.asr)),
-      RawPrayerInfo(PrayerType.MAGHRIB, maghribMillis, format12h(entity.maghrib)),
-      RawPrayerInfo(PrayerType.ISHA, PrayerAlarmScheduler.parsePrayerTimeToMillis(todayDate, entity.isha), format12h(entity.isha))
+      RawPrayerInfo(PrayerType.FAJR, fajrMillis, sunriseMillis, format12h(entity.fajr)),
+      RawPrayerInfo(PrayerType.DHUHR, dhuhrMillis, asrMillis, format12h(entity.dhuhr)),
+      RawPrayerInfo(PrayerType.ASR, asrMillis, sunsetTransitionMillis, format12h(entity.asr)),
+      RawPrayerInfo(PrayerType.MAGHRIB, maghribMillis, ishaMillis, format12h(entity.maghrib)),
+      RawPrayerInfo(PrayerType.ISHA, ishaMillis, tahajjudTonightMillis, format12h(entity.isha))
     )
 
     val rawVoluntary = listOf(
-      RawPrayerInfo(PrayerType.ISHRAQ, PrayerAlarmScheduler.parsePrayerTimeToMillis(todayDate, voluntaryTimes.ishraq), format12h(voluntaryTimes.ishraq)),
-      RawPrayerInfo(PrayerType.DUHA, PrayerAlarmScheduler.parsePrayerTimeToMillis(todayDate, voluntaryTimes.duha), format12h(voluntaryTimes.duha)),
-      RawPrayerInfo(PrayerType.TAHAJJUD, PrayerAlarmScheduler.parsePrayerTimeToMillis(todayDate, voluntaryTimes.tahajjud), format12h(voluntaryTimes.tahajjud))
+      RawPrayerInfo(PrayerType.ISHRAQ, ishraqMillis, duhaMillis, format12h(voluntaryTimes.ishraq)),
+      RawPrayerInfo(PrayerType.DUHA, duhaMillis, middayZenithMillis, format12h(voluntaryTimes.duha)),
+      RawPrayerInfo(PrayerType.TAHAJJUD, tahajjudTonightMillis, tomorrowFajrMillis, format12h(voluntaryTimes.tahajjud))
+    )
+
+    val fullTimeline = listOf(
+      RawPrayerInfo(PrayerType.TAHAJJUD, tahajjudEarlyMorningMillis, fajrMillis, format12h(voluntaryTimes.tahajjud)),
+      RawPrayerInfo(PrayerType.FAJR, fajrMillis, sunriseMillis, format12h(entity.fajr)),
+      RawPrayerInfo(PrayerType.ISHRAQ, ishraqMillis, duhaMillis, format12h(voluntaryTimes.ishraq)),
+      RawPrayerInfo(PrayerType.DUHA, duhaMillis, middayZenithMillis, format12h(voluntaryTimes.duha)),
+      RawPrayerInfo(PrayerType.DHUHR, dhuhrMillis, asrMillis, format12h(entity.dhuhr)),
+      RawPrayerInfo(PrayerType.ASR, asrMillis, sunsetTransitionMillis, format12h(entity.asr)),
+      RawPrayerInfo(PrayerType.MAGHRIB, maghribMillis, ishaMillis, format12h(entity.maghrib)),
+      RawPrayerInfo(PrayerType.ISHA, ishaMillis, tahajjudTonightMillis, format12h(entity.isha)),
+      RawPrayerInfo(PrayerType.TAHAJJUD, tahajjudTonightMillis, tomorrowFajrMillis, format12h(voluntaryTimes.tahajjud)),
+      RawPrayerInfo(PrayerType.FAJR, tomorrowFajrMillis, tomorrowFajrMillis + (sunriseMillis - fajrMillis), format12h(entity.fajr))
     )
 
     val solar = SolarTimes(
@@ -293,6 +377,8 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
     val forbidden = listOf(
       ForbiddenInterval(
         name = "Sunrise Transition",
+        arabicName = "شروق الشمس",
+        bengaliName = "সূর্যোদয় বিরতি",
         intervalFormatted = "${format12h(entity.sunrise)} - ${format12h(voluntaryTimes.ishraq)}",
         description = "From sunrise until the sun has risen above the horizon (~15 mins)",
         startMillis = sunriseMillis,
@@ -300,6 +386,8 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
       ),
       ForbiddenInterval(
         name = "Midday Solar Zenith",
+        arabicName = "استواء الشمس",
+        bengaliName = "দ্বিপ্রহরের সূর্য চূড়া",
         intervalFormatted = "${formatMillis12h(dhuhrMillis - 15 * 60 * 1000L)} - ${format12h(entity.dhuhr)}",
         description = "When the sun is at its exact zenith until it declines into Dhuhr (~15 mins)",
         startMillis = dhuhrMillis - (15 * 60 * 1000L),
@@ -307,6 +395,8 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
       ),
       ForbiddenInterval(
         name = "Sunset Transition",
+        arabicName = "غروب الشمس",
+        bengaliName = "সূর্যাস্ত বিরতি",
         intervalFormatted = "${formatMillis12h(maghribMillis - 15 * 60 * 1000L)} - ${format12h(entity.maghrib)}",
         description = "When the sun pales and sets into the horizon before Maghrib (~15 mins)",
         startMillis = maghribMillis - (15 * 60 * 1000L),
@@ -320,9 +410,22 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
       entityKey = key,
       obligatory = rawObligatory,
       voluntary = rawVoluntary,
+      fullTimeline = fullTimeline,
       solar = solar,
       forbiddenIntervals = forbidden,
-      lastSyncFormatted = lastSyncFormatted
+      lastSyncFormatted = lastSyncFormatted,
+      sunriseMillis = sunriseMillis,
+      dhuhrMillis = dhuhrMillis,
+      asrMillis = asrMillis,
+      maghribMillis = maghribMillis,
+      ishaMillis = ishaMillis,
+      fajrMillis = fajrMillis,
+      ishraqMillis = ishraqMillis,
+      duhaMillis = duhaMillis,
+      middayZenithMillis = middayZenithMillis,
+      sunsetTransitionMillis = sunsetTransitionMillis,
+      tahajjudEarlyMillis = tahajjudEarlyMorningMillis,
+      tahajjudTonightMillis = tahajjudTonightMillis
     )
     cachedDaySchedule = built
     return built
@@ -334,84 +437,106 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
     val enabledForbiddenSet = repository.getEnabledForbiddenTimes()
     val now = System.currentTimeMillis()
 
-    var nextItem: PrayerItem? = null
-    var minDiff = Long.MAX_VALUE
-
-    val obligatoryItems = cached.obligatory.map { raw ->
-      val isPassed = now > raw.timeMillis
-      val isEnabled = enabledSet.contains(raw.type.displayName)
-      val item = PrayerItem(
-        type = raw.type,
-        timeFormatted = raw.formatted12h,
-        timeMillis = raw.timeMillis,
-        isPassed = isPassed,
-        isCurrent = false,
-        isNext = false,
-        notificationEnabled = isEnabled
-      )
-
-      val diff = raw.timeMillis - now
-      if (diff > 0 && diff < minDiff) {
-        minDiff = diff
-        nextItem = item
+    // 1. Determine Current Prayer (among ALL obligatory and voluntary prayers)
+    val currentRaw: RawPrayerInfo? = when {
+      // If before early morning Tahajjud, it's still yesterday's Isha time
+      now < cached.tahajjudEarlyMillis -> {
+        val yesterdayIshaMillis = cached.ishaMillis - (24 * 3600 * 1000L)
+        RawPrayerInfo(PrayerType.ISHA, yesterdayIshaMillis, cached.tahajjudEarlyMillis, format12h(entity.isha))
       }
-      item
-    }
-
-    if (nextItem == null && obligatoryItems.isNotEmpty()) {
-      val tomorrowFajrMillis = obligatoryItems.first().timeMillis + (24 * 3600 * 1000L)
-      minDiff = tomorrowFajrMillis - now
-      nextItem = obligatoryItems.first().copy(timeMillis = tomorrowFajrMillis)
-    }
-
-    // Determine current prayer among obligatory prayers (the latest prayer whose time has arrived)
-    val passedPrayers = obligatoryItems.filter { now >= it.timeMillis }
-    val currentItem: PrayerItem? = if (passedPrayers.isNotEmpty()) {
-      passedPrayers.maxByOrNull { it.timeMillis }
-    } else if (obligatoryItems.isNotEmpty()) {
-      // Before today's Fajr -> current prayer is yesterday's Isha
-      val yesterdayIshaMillis = obligatoryItems.last().timeMillis - (24 * 3600 * 1000L)
-      obligatoryItems.last().copy(
-        timeMillis = yesterdayIshaMillis,
-        isPassed = true
-      )
-    } else {
-      null
-    }
-
-    val updatedObligatory = obligatoryItems.map { item ->
-      item.copy(
-        isCurrent = item.type == currentItem?.type,
-        isNext = item.type == nextItem?.type
-      )
-    }
-
-    val voluntaryItems = cached.voluntary.map { raw ->
-      var millis = raw.timeMillis
-      if (raw.type == PrayerType.TAHAJJUD && now > millis) {
-        millis += 24 * 3600 * 1000L
+      else -> {
+        // Find if now is inside any prayer's active window [startMillis .. endMillis)
+        cached.fullTimeline.firstOrNull { now >= it.timeMillis && now < it.endMillis }
       }
+    }
+
+    val currentItem: PrayerItem? = currentRaw?.let { raw ->
       PrayerItem(
         type = raw.type,
         timeFormatted = raw.formatted12h,
-        timeMillis = millis,
-        isPassed = now > millis,
-        isCurrent = false,
+        timeMillis = raw.timeMillis,
+        isPassed = false,
+        isCurrent = true,
         isNext = false,
         notificationEnabled = enabledSet.contains(raw.type.displayName)
       )
     }
 
+    // 2. Determine Next Upcoming Prayer (among ALL obligatory and voluntary prayers)
+    val nextRaw: RawPrayerInfo? = cached.fullTimeline.firstOrNull { it.timeMillis > now }
+    val nextItem: PrayerItem? = nextRaw?.let { raw ->
+      PrayerItem(
+        type = raw.type,
+        timeFormatted = raw.formatted12h,
+        timeMillis = raw.timeMillis,
+        isPassed = false,
+        isCurrent = false,
+        isNext = true,
+        notificationEnabled = enabledSet.contains(raw.type.displayName)
+      )
+    }
+
+    val minDiff = if (nextRaw != null) nextRaw.timeMillis - now else 0L
+
     val updatedForbidden = cached.forbiddenIntervals.map { interval ->
       ForbiddenTimeItem(
         name = interval.name,
-        arabicName = "",
+        arabicName = interval.arabicName,
+        bengaliName = interval.bengaliName,
         intervalFormatted = interval.intervalFormatted,
         description = interval.description,
         startMillis = interval.startMillis,
         endMillis = interval.endMillis,
         isActiveNow = now in interval.startMillis..interval.endMillis,
         notificationEnabled = enabledForbiddenSet.contains(interval.name)
+      )
+    }
+
+    val activeForbidden = updatedForbidden.firstOrNull { it.isActiveNow }
+    val effectiveCurrentItem: PrayerItem? = if (activeForbidden != null) null else currentItem
+
+    // 3. Map Obligatory Prayers list for UI
+    val updatedObligatory = cached.obligatory.map { raw ->
+      val isPassed = when (raw.type) {
+        PrayerType.FAJR -> now >= cached.sunriseMillis // Fajr ends strictly at sunrise!
+        PrayerType.ASR -> now >= cached.sunsetTransitionMillis // Asr ends at sunset transition!
+        PrayerType.ISHA -> now in cached.tahajjudEarlyMillis until cached.ishaMillis
+        else -> now >= raw.endMillis
+      }
+      val isCurrent = effectiveCurrentItem?.type == raw.type
+      val isNext = nextItem?.type == raw.type
+
+      PrayerItem(
+        type = raw.type,
+        timeFormatted = raw.formatted12h,
+        timeMillis = raw.timeMillis,
+        isPassed = isPassed,
+        isCurrent = isCurrent,
+        isNext = isNext,
+        notificationEnabled = enabledSet.contains(raw.type.displayName)
+      )
+    }
+
+    // 4. Map Voluntary / Sunnah Prayers list for UI
+    val updatedVoluntary = cached.voluntary.map { raw ->
+      val isTahajjud = raw.type == PrayerType.TAHAJJUD
+      val displayMillis = if (isTahajjud && now < cached.fajrMillis) cached.tahajjudEarlyMillis else raw.timeMillis
+      val isPassed = when (raw.type) {
+        PrayerType.DUHA -> now >= cached.middayZenithMillis // Duha ends at midday solar zenith!
+        PrayerType.TAHAJJUD -> now in cached.fajrMillis until cached.tahajjudTonightMillis
+        else -> now >= raw.endMillis
+      }
+      val isCurrent = effectiveCurrentItem?.type == raw.type
+      val isNext = nextItem?.type == raw.type
+
+      PrayerItem(
+        type = raw.type,
+        timeFormatted = raw.formatted12h,
+        timeMillis = displayMillis,
+        isPassed = isPassed,
+        isCurrent = isCurrent,
+        isNext = isNext,
+        notificationEnabled = enabledSet.contains(raw.type.displayName)
       )
     }
 
@@ -427,10 +552,11 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
 
     val current = _uiState.value
     val listsUnchanged = current.prayers == updatedObligatory &&
-        current.voluntaryPrayers == voluntaryItems &&
+        current.voluntaryPrayers == updatedVoluntary &&
         current.forbiddenTimes == updatedForbidden &&
-        current.currentPrayer?.type == currentItem?.type &&
-        current.currentPrayer?.timeMillis == currentItem?.timeMillis &&
+        current.activeForbiddenTime == activeForbidden &&
+        current.currentPrayer?.type == effectiveCurrentItem?.type &&
+        current.currentPrayer?.timeMillis == effectiveCurrentItem?.timeMillis &&
         current.nextPrayer?.type == nextItem?.type &&
         current.nextPrayer?.timeMillis == nextItem?.timeMillis &&
         current.isCloseToNextPrayer == isCloseToNext &&
@@ -444,10 +570,11 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
       _uiState.update {
         it.copy(
           prayers = updatedObligatory,
-          voluntaryPrayers = voluntaryItems,
+          voluntaryPrayers = updatedVoluntary,
           solarTimes = cached.solar,
           forbiddenTimes = updatedForbidden,
-          currentPrayer = currentItem,
+          currentPrayer = effectiveCurrentItem,
+          activeForbiddenTime = activeForbidden,
           nextPrayer = nextItem,
           isCloseToNextPrayer = isCloseToNext,
           countdownText = countdownStr,

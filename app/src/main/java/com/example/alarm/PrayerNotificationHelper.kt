@@ -12,6 +12,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.example.MainActivity
 import com.example.R
+import com.example.util.AppLanguageHelper
 
 object PrayerNotificationHelper {
   const val CHANNEL_ID = "prayer_time_notifications_v1"
@@ -51,6 +52,8 @@ object PrayerNotificationHelper {
   ) {
     createNotificationChannel(context)
 
+    val lang = AppLanguageHelper.getSavedLanguage(context)
+
     val contentIntent = Intent(context, MainActivity::class.java).apply {
       flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
       putExtra("SOURCE", "NOTIFICATION")
@@ -64,16 +67,18 @@ object PrayerNotificationHelper {
       PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
 
-    val quranQuote = getPrayerQuote(prayerName)
+    val title = AppLanguageHelper.getNotificationTitle(prayerName, prayerTime, lang)
+    val quranQuote = AppLanguageHelper.getPrayerQuote(prayerName, lang)
+    val subtext = AppLanguageHelper.getNotificationSubtext(lang)
 
     val notification = NotificationCompat.Builder(context, CHANNEL_ID)
       .setSmallIcon(R.drawable.ic_launcher_foreground)
-      .setContentTitle("🕌 Time for $prayerName Prayer ($prayerTime)")
+      .setContentTitle(title)
       .setContentText(quranQuote)
       .setStyle(
         NotificationCompat.BigTextStyle()
-          .setBigContentTitle("🕌 Time for $prayerName Prayer ($prayerTime)")
-          .bigText("$quranQuote\n\nTake a mindful break to establish your prayer on time.")
+          .setBigContentTitle(title)
+          .bigText("$quranQuote\n\n$subtext")
       )
       .setPriority(NotificationCompat.PRIORITY_HIGH)
       .setCategory(NotificationCompat.CATEGORY_ALARM)
@@ -98,6 +103,8 @@ object PrayerNotificationHelper {
   ) {
     createNotificationChannel(context)
 
+    val lang = AppLanguageHelper.getSavedLanguage(context)
+
     val contentIntent = Intent(context, MainActivity::class.java).apply {
       flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
       putExtra("SOURCE", "FORBIDDEN_NOTIFICATION")
@@ -111,23 +118,17 @@ object PrayerNotificationHelper {
       PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
 
-    val warningDetails = when {
-      forbiddenName.contains("Sunrise", ignoreCase = true) ->
-        "The sun is rising above the horizon. Voluntary (Nafl) prayers are prohibited until the sun has fully risen (Ishraq time)."
-      forbiddenName.contains("Zenith", ignoreCase = true) ->
-        "The sun is at its astronomical meridian peak (Istiwa / Zawal). Voluntary prayers are prohibited until the sun begins to decline into Dhuhr."
-      else ->
-        "The sun is setting into the horizon. Voluntary prayers are prohibited during this interval until Maghrib."
-    }
+    val title = AppLanguageHelper.getForbiddenNotificationTitle(forbiddenName, lang)
+    val body = AppLanguageHelper.getForbiddenNotificationBody(forbiddenName, intervalFormatted, lang)
 
     val notification = NotificationCompat.Builder(context, CHANNEL_ID)
       .setSmallIcon(R.drawable.ic_launcher_foreground)
-      .setContentTitle("⚠️ Forbidden Prayer Time: $forbiddenName")
-      .setContentText("Voluntary prayers prohibited now ($intervalFormatted)")
+      .setContentTitle(title)
+      .setContentText(body)
       .setStyle(
         NotificationCompat.BigTextStyle()
-          .setBigContentTitle("⚠️ Forbidden Prayer Time: $forbiddenName")
-          .bigText("$warningDetails\n\nInterval: $intervalFormatted\nPlease refrain from offering voluntary prayers until this interval completes.")
+          .setBigContentTitle(title)
+          .bigText(body)
       )
       .setPriority(NotificationCompat.PRIORITY_HIGH)
       .setCategory(NotificationCompat.CATEGORY_REMINDER)
@@ -141,20 +142,6 @@ object PrayerNotificationHelper {
       NotificationManagerCompat.from(context).notify(notificationId, notification)
     } catch (_: SecurityException) {
       // Permission not granted yet
-    }
-  }
-
-  private fun getPrayerQuote(prayerName: String): String {
-    return when (prayerName.lowercase()) {
-      "fajr" -> "Indeed, the recitation of dawn is ever witnessed. (Surah Al-Isra 17:78)"
-      "ishraq" -> "Whoever prays Fajr, remembers Allah until sunrise, and prays two rak'ahs gets the reward of Hajj and Umrah. (Tirmidhi)"
-      "duha" -> "Charity is due upon every joint of your body; and two rak'ahs of Duha suffices for all of that. (Sahih Muslim)"
-      "dhuhr" -> "Establish prayer at the decline of the sun. (Surah Al-Isra 17:78)"
-      "asr" -> "Maintain with care the [obligatory] prayers and [in particular] the middle prayer. (Surah Al-Baqarah 2:238)"
-      "maghrib" -> "And remember the name of your Lord morning and evening. (Surah Al-Insan 76:25)"
-      "isha" -> "And during a part of the night, prostrate to Him and exalt Him a long night. (Surah Al-Insan 76:26)"
-      "tahajjud" -> "The best prayer after the obligatory prayers is the night prayer (Tahajjud / Qiyam al-Layl). (Sahih Muslim)"
-      else -> "Indeed, prayer has been decreed upon the believers a decree of specified times. (Surah An-Nisa 4:103)"
     }
   }
 }

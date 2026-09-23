@@ -20,6 +20,24 @@ class PrayerRepository(private val context: Context) {
   private val KEY_ENABLED_PRAYERS = "key_enabled_prayers"
   private val KEY_ENABLED_FORBIDDEN_TIMES = "key_enabled_forbidden_times"
   private val KEY_HAS_REQUESTED_INITIAL_PERMISSIONS = "key_has_requested_initial_permissions"
+  private val KEY_APP_LANGUAGE = "key_app_language"
+  private val KEY_APP_THEME = "key_app_theme"
+
+  fun getAppLanguage(): String {
+    return prefs.getString(KEY_APP_LANGUAGE, "en") ?: "en"
+  }
+
+  fun setAppLanguage(language: String) {
+    prefs.edit().putString(KEY_APP_LANGUAGE, language).apply()
+  }
+
+  fun getAppTheme(): String {
+    return prefs.getString(KEY_APP_THEME, "system") ?: "system"
+  }
+
+  fun setAppTheme(theme: String) {
+    prefs.edit().putString(KEY_APP_THEME, theme).apply()
+  }
 
   fun hasRequestedInitialPermissions(): Boolean {
     return prefs.getBoolean(KEY_HAS_REQUESTED_INITIAL_PERMISSIONS, false)

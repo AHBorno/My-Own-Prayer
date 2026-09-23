@@ -6,9 +6,12 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ui.PrayerScreen
 import com.example.ui.PrayerViewModel
@@ -20,9 +23,17 @@ class MainActivity : ComponentActivity() {
     enableHighRefreshRate()
     enableEdgeToEdge()
     setContent {
-      MyApplicationTheme {
+      val viewModel: PrayerViewModel = viewModel()
+      val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+      val systemDark = isSystemInDarkTheme()
+      val isDark = when (uiState.appTheme) {
+        "light" -> false
+        "dark" -> true
+        else -> systemDark
+      }
+
+      MyApplicationTheme(darkTheme = isDark) {
         Surface(modifier = Modifier.fillMaxSize()) {
-          val viewModel: PrayerViewModel = viewModel()
           PrayerScreen(viewModel = viewModel)
         }
       }

@@ -1,20 +1,31 @@
 package com.example.data.model
 
+import com.example.util.AppLanguageHelper
+
 enum class PrayerType(
   val displayName: String,
   val arabicName: String,
+  val bengaliName: String,
   val isVoluntary: Boolean = false,
   val description: String = ""
 ) {
-  FAJR("Fajr", "الفجر", false, "Dawn obligatory prayer"),
-  SUNRISE("Sunrise", "الشروق", false, "Solar horizon transit"),
-  ISHRAQ("Ishraq", "الإشراق", true, "15 min after sunrise (Sunnah)"),
-  DUHA("Duha", "الضحى", true, "Forenoon prayer (Sunnah)"),
-  DHUHR("Dhuhr", "الظهر", false, "Midday obligatory prayer"),
-  ASR("Asr", "العصر", false, "Late afternoon obligatory prayer"),
-  MAGHRIB("Maghrib", "المغرب", false, "Sunset obligatory prayer"),
-  ISHA("Isha", "العشاء", false, "Night obligatory prayer"),
-  TAHAJJUD("Tahajjud", "التهجد", true, "Last third of night (Qiyam al-Layl)");
+  FAJR("Fajr", "الفجر", "ফজর", false, "Dawn prayer until sunrise"),
+  SUNRISE("Sunrise", "الشروق", "সূর্যোদয়", false, "Solar horizon transit"),
+  ISHRAQ("Ishraq", "الإشراق", "ইশরাক", true, "15 min after sunrise (Sunnah)"),
+  DUHA("Duha", "الضحى", "চাশত (দুহা)", true, "Forenoon prayer until solar zenith (Sunnah)"),
+  DHUHR("Dhuhr", "الظهر", "যোহর", false, "Midday obligatory prayer"),
+  ASR("Asr", "العصر", "আসর", false, "Late afternoon prayer until sunset transition"),
+  MAGHRIB("Maghrib", "المغرب", "মাগরিব", false, "Sunset obligatory prayer"),
+  ISHA("Isha", "العشاء", "এশা", false, "Night obligatory prayer"),
+  TAHAJJUD("Tahajjud", "التهجد", "তাহাজ্জুদ", true, "Last third of night (Qiyam al-Layl)");
+
+  fun getLocalizedName(lang: String): String {
+    return AppLanguageHelper.getPrayerDisplayName(this, lang)
+  }
+
+  fun getLocalizedDescription(lang: String): String {
+    return AppLanguageHelper.getPrayerDescription(this, lang)
+  }
 
   companion object {
     fun fromName(name: String): PrayerType? {
@@ -44,11 +55,20 @@ data class SolarTimes(
 
 data class ForbiddenTimeItem(
   val name: String,
-  val arabicName: String,
+  val arabicName: String = "",
+  val bengaliName: String = "",
   val intervalFormatted: String, // e.g. "06:10 AM - 06:25 AM"
   val description: String,
   val startMillis: Long,
   val endMillis: Long,
   val isActiveNow: Boolean = false,
   val notificationEnabled: Boolean = false
-)
+) {
+  fun getLocalizedName(lang: String): String {
+    return AppLanguageHelper.getForbiddenName(name, lang)
+  }
+
+  fun getLocalizedDescription(lang: String): String {
+    return AppLanguageHelper.getForbiddenDescription(name, lang)
+  }
+}
