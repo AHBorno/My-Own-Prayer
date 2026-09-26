@@ -3458,8 +3458,8 @@ fun PrayerSideMenuContent(
             Icon(
               painter = painterResource(id = R.drawable.ic_tasbeeh),
               contentDescription = "Tasbeeh",
-              tint = Color(0xFF047857),
-              modifier = Modifier.size(22.dp)
+              tint = MaterialTheme.colorScheme.primary,
+              modifier = Modifier.size(24.dp)
             )
           },
           label = {
@@ -3472,7 +3472,7 @@ fun PrayerSideMenuContent(
               Text(
                 text = "${currentDhikr.arabic} • $currentCount",
                 style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFF047857),
+                color = MaterialTheme.colorScheme.primary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
               )
@@ -3481,14 +3481,14 @@ fun PrayerSideMenuContent(
           badge = {
             Surface(
               shape = RoundedCornerShape(8.dp),
-              color = Color(0xFF047857).copy(alpha = 0.15f)
+              color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
             ) {
               Text(
                 text = "$currentCount",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF047857),
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
               )
             }
           },

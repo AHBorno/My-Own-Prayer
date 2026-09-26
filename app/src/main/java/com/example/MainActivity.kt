@@ -17,7 +17,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ui.PrayerScreen
 import com.example.ui.PrayerViewModel
 import com.example.ui.theme.MyApplicationTheme
+import com.example.update.AppUpdateManager
 import com.example.util.AlertSoundManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
   private var viewModelInstance: PrayerViewModel? = null
@@ -27,6 +31,12 @@ class MainActivity : ComponentActivity() {
     AlertSoundManager.stopSound()
     enableHighRefreshRate()
     enableEdgeToEdge()
+
+    // Automatically clean up previously downloaded update APKs to reclaim disk space
+    CoroutineScope(Dispatchers.IO).launch {
+      AppUpdateManager.cleanUpOldApkFiles(applicationContext)
+    }
+
     setContent {
       val viewModel: PrayerViewModel = viewModel()
       viewModelInstance = viewModel
@@ -58,6 +68,12 @@ class MainActivity : ComponentActivity() {
     if (intent.getStringExtra("SOURCE") == "TASBEEH") {
       viewModelInstance?.openTasbeeh()
     }
+  }
+
+  override fun onResume() {
+    super.onResume()
+    // Resume any pending install if user was prompted for unknown sources permission
+    AppUpdateManager.resumePendingInstallIfAny(this)
   }
 
   /**

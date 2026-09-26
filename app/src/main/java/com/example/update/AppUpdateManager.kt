@@ -4,19 +4,20 @@ import android.app.DownloadManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.provider.Settings
 import android.util.Log
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.content.FileProvider
 import com.example.BuildConfig
 import com.example.MainActivity
 import com.example.R
+import com.example.util.AppLanguageHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -46,6 +47,10 @@ object AppUpdateManager {
   const val UPDATE_CHANNEL_ID = "app_updates_channel"
   private const val UPDATE_NOTIFICATION_ID = 9001
 
+  private const val PREFS_NAME = "app_update_prefs"
+  private const val KEY_PENDING_DOWNLOAD_ID = "pending_update_download_id"
+  private const val KEY_PENDING_APK_PATH = "pending_update_apk_path"
+
   private val httpClient = OkHttpClient.Builder()
     .connectTimeout(15, TimeUnit.SECONDS)
     .readTimeout(20, TimeUnit.SECONDS)
@@ -58,7 +63,6 @@ object AppUpdateManager {
   suspend fun checkForUpdates(context: Context): AppUpdateInfo = withContext(Dispatchers.IO) {
     val currentVersion = BuildConfig.VERSION_NAME
     try {
-      // First try /releases (which includes Pre-releases and Drafts), then /releases/latest
       var releaseJson: JSONObject? = null
       var httpCode = 0
 
@@ -80,7 +84,6 @@ object AppUpdateManager {
         }
       }
 
-      // If /releases didn't yield a release (e.g. 404), try /releases/latest as fallback
       if (releaseJson == null && httpCode != 404) {
         val latestRequest = Request.Builder()
           .url(LATEST_RELEASE_URL)
@@ -99,7 +102,7 @@ object AppUpdateManager {
 
       if (releaseJson == null) {
         val msg = when (httpCode) {
-          404 -> "Repository is private or URL incorrect (HTTP 404). If private, make the repo Public on GitHub so the app can read releases."
+          404 -> "Repository is private or URL incorrect (HTTP 404)."
           403 -> "GitHub API rate limit exceeded (HTTP 403). Try again in a few minutes."
           0 -> "Could not connect to GitHub."
           else -> "GitHub returned HTTP $httpCode."
@@ -165,10 +168,6 @@ object AppUpdateManager {
     }
   }
 
-  /**
-   * Compares versions like "1.0", "1.0.0", "1.0 Beta", "1.1" etc.
-   * Returns true if remote is strictly greater or distinct newer release.
-   */
   fun isVersionNewer(remote: String, local: String): Boolean {
     if (remote.isBlank()) return false
     val cleanRemote = remote.trim().removePrefix("v").removePrefix("V")
@@ -188,7 +187,6 @@ object AppUpdateManager {
         if (r > l) return true
         if (r < l) return false
       }
-      // If numeric prefixes are identical (e.g. "1.0" vs "1.0 Beta"), treat standard release as newer than beta
       if (cleanLocal.contains("beta", ignoreCase = true) && !cleanRemote.contains("beta", ignoreCase = true)) {
         return true
       }
@@ -198,9 +196,6 @@ object AppUpdateManager {
     }
   }
 
-  /**
-   * Posts an Android notification alerting the user of an available update.
-   */
   fun showUpdateNotification(context: Context, updateInfo: AppUpdateInfo) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
       val channel = NotificationChannel(
@@ -248,29 +243,137 @@ object AppUpdateManager {
   }
 
   /**
-   * Triggers download of the APK using Android's system DownloadManager.
+   * Starts downloading the new APK file via DownloadManager.
+   * Cleans up any previously downloaded leftover APKs before starting.
    */
   fun startApkDownload(context: Context, downloadUrl: String, fileName: String?): Long {
-    val actualFileName = fileName ?: "My-Own-Prayer-update.apk"
+    // 1. Clean up old leftover APKs first
+    cleanUpOldApkFiles(context)
+
+    val actualFileName = fileName?.takeIf { it.isNotBlank() } ?: "My.Own.Prayer.apk"
     val uri = Uri.parse(downloadUrl)
 
+    val downloadDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+    val targetFile = File(downloadDir, actualFileName)
+
+    // Remove existing file with the same name if present
+    if (targetFile.exists()) {
+      targetFile.delete()
+    }
+
     val request = DownloadManager.Request(uri).apply {
-      setTitle("Downloading $actualFileName")
-      setDescription("Downloading latest app update...")
+      setTitle("My Own Prayer Update")
+      setDescription("Downloading $actualFileName...")
       setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
       setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, actualFileName)
       setMimeType("application/vnd.android.package-archive")
     }
 
     val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-    return downloadManager.enqueue(request)
+    val downloadId = downloadManager.enqueue(request)
+
+    // Save download tracking in SharedPreferences
+    val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    prefs.edit()
+      .putLong(KEY_PENDING_DOWNLOAD_ID, downloadId)
+      .putString(KEY_PENDING_APK_PATH, targetFile.absolutePath)
+      .apply()
+
+    Toast.makeText(context, "Downloading update...", Toast.LENGTH_SHORT).show()
+    return downloadId
   }
 
   /**
-   * Installs downloaded APK file using FileProvider.
+   * Called when DownloadManager completes a download.
+   * Immediately pops the Android system installation dialog.
+   */
+  fun handleDownloadCompleted(context: Context, downloadId: Long) {
+    try {
+      val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+      val savedId = prefs.getLong(KEY_PENDING_DOWNLOAD_ID, -1L)
+      val savedPath = prefs.getString(KEY_PENDING_APK_PATH, null)
+
+      val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+      val query = DownloadManager.Query().setFilterById(downloadId)
+      val cursor = downloadManager.query(query)
+
+      var apkFile: File? = null
+
+      if (cursor != null && cursor.moveToFirst()) {
+        val statusIdx = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
+        val status = if (statusIdx != -1) cursor.getInt(statusIdx) else -1
+
+        if (status == DownloadManager.STATUS_SUCCESSFUL) {
+          val localUriIdx = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI)
+          val localUriStr = if (localUriIdx != -1) cursor.getString(localUriIdx) else null
+          if (!localUriStr.isNullOrBlank()) {
+            val uri = Uri.parse(localUriStr)
+            val path = uri.path
+            if (!path.isNullOrBlank()) {
+              val f = File(path)
+              if (f.exists() && f.length() > 0) {
+                apkFile = f
+              }
+            }
+          }
+        }
+        cursor.close()
+      }
+
+      if (apkFile == null && !savedPath.isNullOrBlank()) {
+        val fallback = File(savedPath)
+        if (fallback.exists() && fallback.length() > 0) {
+          apkFile = fallback
+        }
+      }
+
+      if (apkFile == null) {
+        // Try searching in downloads directory
+        val downloadDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+        val candidate = downloadDir?.listFiles()?.firstOrNull { it.extension.equals("apk", ignoreCase = true) }
+        if (candidate != null && candidate.exists() && candidate.length() > 0) {
+          apkFile = candidate
+        }
+      }
+
+      if (apkFile != null && apkFile.exists() && apkFile.length() > 0) {
+        Log.d(TAG, "Download finished successfully. Launching package installer for: ${apkFile.absolutePath}")
+        installApk(context, apkFile)
+      } else {
+        Log.w(TAG, "Downloaded APK file not found or empty.")
+      }
+    } catch (e: Exception) {
+      Log.e(TAG, "Error handling download completion", e)
+    }
+  }
+
+  /**
+   * Installs downloaded APK file using FileProvider and opens the installation dialogue.
    */
   fun installApk(context: Context, apkFile: File) {
     try {
+      // Android 8.0+ Check for unknown sources installation permission
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        if (!context.packageManager.canRequestPackageInstalls()) {
+          // Save path so we can auto-install upon returning
+          val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+          prefs.edit().putString(KEY_PENDING_APK_PATH, apkFile.absolutePath).apply()
+
+          Toast.makeText(
+            context,
+            "Please allow installing updates for My Own Prayer",
+            Toast.LENGTH_LONG
+          ).show()
+
+          val settingsIntent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+            data = Uri.parse("package:${context.packageName}")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+          }
+          context.startActivity(settingsIntent)
+          return
+        }
+      }
+
       val apkUri = FileProvider.getUriForFile(
         context,
         "${context.packageName}.fileprovider",
@@ -281,10 +384,114 @@ object AppUpdateManager {
         setDataAndType(apkUri, "application/vnd.android.package-archive")
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
       }
+
+      Log.d(TAG, "Opening package installer dialog for ${apkFile.name}...")
       context.startActivity(intent)
     } catch (e: Exception) {
-      Log.e(TAG, "Failed to launch package installer: ${e.message}")
+      Log.e(TAG, "Failed to launch package installer: ${e.message}", e)
+      try {
+        Toast.makeText(context, "Error opening installer: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+      } catch (_: Exception) {}
+    }
+  }
+
+  /**
+   * Checks if an install was pending due to permission request and triggers it.
+   */
+  fun resumePendingInstallIfAny(context: Context) {
+    try {
+      val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+      val pendingPath = prefs.getString(KEY_PENDING_APK_PATH, null) ?: return
+      val file = File(pendingPath)
+      if (file.exists() && file.length() > 0) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || context.packageManager.canRequestPackageInstalls()) {
+          prefs.edit().remove(KEY_PENDING_APK_PATH).apply()
+          installApk(context, file)
+        }
+      } else {
+        prefs.edit().remove(KEY_PENDING_APK_PATH).apply()
+      }
+    } catch (e: Exception) {
+      Log.e(TAG, "Error resuming pending install", e)
+    }
+  }
+
+  /**
+   * Cleans up previously downloaded APK files to free up device space.
+   * Matches files such as:
+   * - My.Own.Prayer.apk
+   * - My.Own.Prayer (1).apk, My.Own.Prayer (2).apk
+   * - My-Own-Prayer-update.apk
+   * - Any other update APK in the app's download or cache folders.
+   */
+  fun cleanUpOldApkFiles(context: Context) {
+    try {
+      val directories = listOfNotNull(
+        context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
+        context.getExternalFilesDir(null),
+        context.filesDir,
+        context.cacheDir,
+        context.externalCacheDir
+      )
+
+      // Regex matching standard downloaded APK naming schemes
+      val apkPattern = Regex("(?i).*(my[._\\-\\s]*own[._\\-\\s]*prayer|update|app).*\\.apk$")
+
+      var deletedCount = 0
+      var freedBytes = 0L
+
+      for (dir in directories) {
+        if (!dir.exists() || !dir.isDirectory) continue
+
+        val files = dir.listFiles() ?: continue
+        for (file in files) {
+          if (file.isFile && (file.extension.equals("apk", ignoreCase = true) || apkPattern.matches(file.name))) {
+            val length = file.length()
+            val name = file.name
+            if (file.delete()) {
+              deletedCount++
+              freedBytes += length
+              Log.d(TAG, "Cleaned up old downloaded APK: $name (${length / 1024} KB freed)")
+            }
+          }
+        }
+      }
+
+      // Also clean public Downloads if accessible and created by our package
+      try {
+        val publicDownloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        if (publicDownloads != null && publicDownloads.exists()) {
+          val publicFiles = publicDownloads.listFiles()
+          if (publicFiles != null) {
+            for (file in publicFiles) {
+              if (file.isFile && apkPattern.matches(file.name)) {
+                val length = file.length()
+                val name = file.name
+                if (file.delete()) {
+                  deletedCount++
+                  freedBytes += length
+                  Log.d(TAG, "Cleaned up public downloaded APK: $name")
+                }
+              }
+            }
+          }
+        }
+      } catch (_: Exception) {
+        // Handled gracefully on scoped-storage Android versions
+      }
+
+      if (deletedCount > 0) {
+        val mb = "%.2f".format(freedBytes / (1024.0 * 1024.0))
+        Log.i(TAG, "Total old APKs cleaned up: $deletedCount files ($mb MB freed)")
+      }
+
+      // Clear pending download IDs from preferences
+      val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+      prefs.edit().remove(KEY_PENDING_DOWNLOAD_ID).apply()
+    } catch (e: Exception) {
+      Log.e(TAG, "Error cleaning up old APK files", e)
     }
   }
 }

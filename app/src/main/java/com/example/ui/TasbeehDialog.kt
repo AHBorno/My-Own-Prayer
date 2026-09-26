@@ -149,13 +149,13 @@ fun TasbeehDialog(
               modifier = Modifier
                 .size(42.dp)
                 .clip(CircleShape)
-                .background(Color(0xFF047857).copy(alpha = 0.15f)),
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
               contentAlignment = Alignment.Center
             ) {
               Icon(
                 painter = painterResource(id = R.drawable.ic_tasbeeh),
                 contentDescription = null,
-                tint = Color(0xFF047857),
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(24.dp)
               )
             }
@@ -188,7 +188,7 @@ fun TasbeehDialog(
               Icon(
                 imageVector = Icons.Default.Vibration,
                 contentDescription = AppLanguageHelper.getString("vibration", appLanguage),
-                tint = if (vibrationEnabled) Color(0xFF047857) else MaterialTheme.colorScheme.outline,
+                tint = if (vibrationEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
                 modifier = Modifier.size(20.dp)
               )
             }
@@ -205,7 +205,7 @@ fun TasbeehDialog(
               Icon(
                 imageVector = if (soundEnabled) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
                 contentDescription = AppLanguageHelper.getString("sound", appLanguage),
-                tint = if (soundEnabled) Color(0xFF047857) else MaterialTheme.colorScheme.outline,
+                tint = if (soundEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
                 modifier = Modifier.size(20.dp)
               )
             }
@@ -231,13 +231,13 @@ fun TasbeehDialog(
         Card(
           shape = RoundedCornerShape(18.dp),
           colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF064E3B).copy(alpha = 0.08f)
+            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
           ),
           modifier = Modifier
             .fillMaxWidth()
             .border(
               width = 1.dp,
-              color = Color(0xFF047857).copy(alpha = 0.3f),
+              color = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
               shape = RoundedCornerShape(18.dp)
             )
             .clickable { showDhikrPicker = true }
@@ -255,13 +255,13 @@ fun TasbeehDialog(
             ) {
               Surface(
                 shape = RoundedCornerShape(6.dp),
-                color = Color(0xFF047857).copy(alpha = 0.15f)
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
               ) {
                 Text(
                   text = AppLanguageHelper.getString("select_dhikr", appLanguage),
                   style = MaterialTheme.typography.labelSmall,
                   fontWeight = FontWeight.Bold,
-                  color = Color(0xFF047857),
+                  color = MaterialTheme.colorScheme.primary,
                   modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                 )
               }
@@ -269,7 +269,7 @@ fun TasbeehDialog(
               Icon(
                 imageVector = Icons.Default.SwapHoriz,
                 contentDescription = "Switch Dhikr",
-                tint = Color(0xFF047857),
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(18.dp)
               )
             }
@@ -280,7 +280,7 @@ fun TasbeehDialog(
               text = currentDhikr.arabic,
               style = MaterialTheme.typography.headlineSmall,
               fontWeight = FontWeight.Bold,
-              color = Color(0xFF047857),
+              color = MaterialTheme.colorScheme.primary,
               textAlign = TextAlign.Center,
               modifier = Modifier.fillMaxWidth()
             )
@@ -316,7 +316,7 @@ fun TasbeehDialog(
                   Text(
                     text = item.arabic,
                     fontWeight = FontWeight.Bold,
-                    color = if (item.id == currentDhikr.id) Color(0xFF047857) else MaterialTheme.colorScheme.onSurface
+                    color = if (item.id == currentDhikr.id) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                   )
                   Text(
                     text = when (appLanguage) {
@@ -353,7 +353,7 @@ fun TasbeehDialog(
             val label = if (targetVal == 0) "∞ Free" else "$targetVal"
             Surface(
               shape = RoundedCornerShape(12.dp),
-              color = if (isSelected) Color(0xFF047857) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+              color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
               modifier = Modifier
                 .weight(1f)
                 .clickable {
@@ -399,8 +399,8 @@ fun TasbeehDialog(
             .background(
               Brush.radialGradient(
                 colors = listOf(
-                  Color(0xFF047857).copy(alpha = 0.15f),
-                  Color(0xFF047857).copy(alpha = 0.05f),
+                  MaterialTheme.colorScheme.primary.copy(alpha = 0.20f),
+                  MaterialTheme.colorScheme.primary.copy(alpha = 0.06f),
                   MaterialTheme.colorScheme.surface
                 )
               )
@@ -422,8 +422,8 @@ fun TasbeehDialog(
             progress = { progress },
             modifier = Modifier.size(220.dp),
             strokeWidth = 10.dp,
-            color = Color(0xFF047857),
-            trackColor = Color(0xFF047857).copy(alpha = 0.12f),
+            color = MaterialTheme.colorScheme.primary,
+            trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
           )
 
           // Inner Decorative Bead Ring
@@ -435,14 +435,14 @@ fun TasbeehDialog(
               .background(
                 Brush.verticalGradient(
                   colors = listOf(
-                    Color(0xFF047857).copy(alpha = 0.22f),
-                    Color(0xFF064E3B).copy(alpha = 0.35f)
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.40f)
                   )
                 )
               )
               .border(
                 width = 2.dp,
-                color = Color(0xFF10B981).copy(alpha = 0.5f),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                 shape = CircleShape
               )
           ) {
@@ -459,7 +459,7 @@ fun TasbeehDialog(
                 text = if (targetCount > 0) "/ $targetCount" else "∞",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = Color(0xFF047857)
+                color = MaterialTheme.colorScheme.primary
               )
               Spacer(modifier = Modifier.height(2.dp))
               Text(
@@ -518,7 +518,7 @@ fun TasbeehDialog(
                 text = "$roundCount",
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF047857)
+                color = MaterialTheme.colorScheme.primary
               )
             }
           }
@@ -543,7 +543,7 @@ fun TasbeehDialog(
                 text = "$totalCount",
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF047857)
+                color = MaterialTheme.colorScheme.primary
               )
             }
           }
@@ -589,21 +589,21 @@ fun TasbeehDialog(
             .testTag("add_widget_button"),
           shape = RoundedCornerShape(14.dp),
           colors = ButtonDefaults.buttonColors(
-            containerColor = Color(0xFF047857)
+            containerColor = MaterialTheme.colorScheme.primary
           )
         ) {
           Icon(
             imageVector = Icons.Default.Widgets,
             contentDescription = null,
             modifier = Modifier.size(20.dp),
-            tint = Color.White
+            tint = MaterialTheme.colorScheme.onPrimary
           )
           Spacer(modifier = Modifier.width(10.dp))
           Text(
             text = AppLanguageHelper.getString("add_widget_to_home", appLanguage),
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Bold,
-            color = Color.White
+            color = MaterialTheme.colorScheme.onPrimary
           )
         }
       }
@@ -623,18 +623,19 @@ fun TasbeehDialog(
       text = {
         Text(
           text = when (appLanguage) {
-            "bn" -> "আপনি কি চলতি তাসবিহ কাউন্ট রিসেট করতে চান?"
-            "ar" -> "هل ترغب في إعادة ضبط العداد الحالي؟"
-            else -> "Do you want to reset the current count or reset everything including rounds?"
+            "bn" -> "আপনি কি শুধু চলতি কাউন্ট রিসেট করতে চান, নাকি সর্বমোট জিকির সহ সব রিসেট করতে চান?"
+            "ar" -> "هل ترغب في إعادة ضبط العداد الحالي فقط، أم إعادة ضبط الكل بما في ذلك مجموع الأذكار؟"
+            else -> "Do you want to reset only the current count or reset all (current count, rounds, and total dhikr)?"
           }
         )
       },
       confirmButton = {
         TextButton(
           onClick = {
-            TasbeehPreferences.reset(context, resetRounds = true, resetTotal = false)
+            TasbeehPreferences.reset(context, resetRounds = true, resetTotal = true)
             count = 0
             roundCount = 0
+            totalCount = 0L
             showResetConfirmDialog = false
           }
         ) {

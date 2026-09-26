@@ -452,8 +452,11 @@ fun SideMenuDrawerContent(
 
         DrawerActionItem(
           iconPainter = painterResource(id = R.drawable.ic_tasbeeh),
+          iconTint = MaterialTheme.colorScheme.primary,
+          iconBgColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
           title = AppLanguageHelper.getString("tasbeeh_counter", lang),
           subtitle = "${currentDhikr.arabic} • $currentCount",
+          badgeText = "$currentCount",
           onClick = onOpenTasbeeh,
           testTag = "drawer_tasbeeh_button"
         )
@@ -621,8 +624,11 @@ private fun ThemeChip(
 private fun DrawerActionItem(
   icon: ImageVector? = null,
   iconPainter: androidx.compose.ui.graphics.painter.Painter? = null,
+  iconTint: Color? = null,
+  iconBgColor: Color? = null,
   title: String,
   subtitle: String,
+  badgeText: String? = null,
   onClick: () -> Unit,
   testTag: String,
   modifier: Modifier = Modifier
@@ -639,21 +645,21 @@ private fun DrawerActionItem(
       modifier = Modifier
         .size(36.dp)
         .clip(CircleShape)
-        .background(MaterialTheme.colorScheme.surfaceVariant),
+        .background(iconBgColor ?: MaterialTheme.colorScheme.surfaceVariant),
       contentAlignment = Alignment.Center
     ) {
       if (iconPainter != null) {
         Icon(
           painter = iconPainter,
           contentDescription = title,
-          tint = MaterialTheme.colorScheme.onSurfaceVariant,
-          modifier = Modifier.size(18.dp)
+          tint = iconTint ?: MaterialTheme.colorScheme.onSurfaceVariant,
+          modifier = Modifier.size(20.dp)
         )
       } else if (icon != null) {
         Icon(
           imageVector = icon,
           contentDescription = title,
-          tint = MaterialTheme.colorScheme.onSurfaceVariant,
+          tint = iconTint ?: MaterialTheme.colorScheme.onSurfaceVariant,
           modifier = Modifier.size(18.dp)
         )
       }
@@ -669,8 +675,22 @@ private fun DrawerActionItem(
       Text(
         text = subtitle,
         style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
+        color = if (iconTint != null) iconTint else MaterialTheme.colorScheme.onSurfaceVariant
       )
+    }
+    if (badgeText != null) {
+      Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+      ) {
+        Text(
+          text = badgeText,
+          style = MaterialTheme.typography.labelSmall,
+          fontWeight = FontWeight.Bold,
+          color = MaterialTheme.colorScheme.primary,
+          modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+        )
+      }
     }
   }
 }

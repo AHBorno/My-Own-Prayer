@@ -41,6 +41,7 @@ class PrayerApplication : Application() {
     // Ensure today's alarms are scheduled
     CoroutineScope(Dispatchers.IO).launch {
       try {
+        com.example.update.AppUpdateManager.cleanUpOldApkFiles(this@PrayerApplication)
         val city = PrayerSyncManager.getSelectedCity(this@PrayerApplication)
         PrayerSyncManager.syncNow(this@PrayerApplication, city)
       } catch (e: Exception) {
