@@ -41,6 +41,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.BatterySaver
 import androidx.compose.material.icons.filled.Brightness4
 import androidx.compose.material.icons.filled.BugReport
@@ -48,6 +49,8 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Info
@@ -55,6 +58,7 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Notifications
@@ -146,6 +150,7 @@ import com.example.data.model.PrayerItem
 import com.example.data.model.PrayerType
 import com.example.data.model.SolarTimes
 import com.example.update.AppUpdateManager
+import com.example.util.AlertSoundManager
 import com.example.util.AppLanguageHelper
 import com.example.util.HijriDateHelper
 import com.example.util.QiblaHelper
@@ -181,9 +186,18 @@ fun PrayerScreen(
   // Modal dialog states
   var showCityDialog by remember { mutableStateOf(false) }
   var showQiblaCompass by remember { mutableStateOf(false) }
+  var showTasbeehDialog by remember { mutableStateOf(false) }
   var showThemeDialog by remember { mutableStateOf(false) }
+  var showCustomAlertSoundDialog by remember { mutableStateOf(false) }
   var showLanguageDialog by remember { mutableStateOf(false) }
   var showHijriCalendarDialog by remember { mutableStateOf(false) }
+  var showImportantPrayersDialog by remember { mutableStateOf(false) }
+
+  androidx.compose.runtime.LaunchedEffect(uiState.showTasbeehDialog) {
+    if (uiState.showTasbeehDialog) {
+      showTasbeehDialog = true
+    }
+  }
 
   // Check Location Permission State
   var hasLocationPermission by remember {
@@ -298,9 +312,21 @@ fun PrayerScreen(
             coroutineScope.launch { drawerState.close() }
             showHijriCalendarDialog = true
           },
+          onOpenImportantPrayers = {
+            coroutineScope.launch { drawerState.close() }
+            showImportantPrayersDialog = true
+          },
           onOpenTheme = {
             coroutineScope.launch { drawerState.close() }
             showThemeDialog = true
+          },
+          onOpenAlertSound = {
+            coroutineScope.launch { drawerState.close() }
+            showCustomAlertSoundDialog = true
+          },
+          onOpenTasbeeh = {
+            coroutineScope.launch { drawerState.close() }
+            showTasbeehDialog = true
           },
           onCheckUpdates = {
             coroutineScope.launch { drawerState.close() }
@@ -372,6 +398,21 @@ fun PrayerScreen(
             }
           },
           actions = {
+            // Tasbeeh Counter button (Bright primary color)
+            IconButton(
+              onClick = { showTasbeehDialog = true },
+              modifier = Modifier
+                .size(40.dp)
+                .testTag("tasbeeh_top_button")
+            ) {
+              Icon(
+                painter = painterResource(id = R.drawable.ic_tasbeeh),
+                contentDescription = AppLanguageHelper.getString("tasbeeh_counter", uiState.appLanguage),
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(22.dp)
+              )
+            }
+
             // Qibla Compass button
             IconButton(
               onClick = { showQiblaCompass = true },
@@ -383,46 +424,41 @@ fun PrayerScreen(
                 imageVector = Icons.Default.Explore,
                 contentDescription = AppLanguageHelper.getString("qibla_compass", uiState.appLanguage),
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(21.dp)
               )
             }
 
-            // GPS Location detection button
-            IconButton(
-              onClick = {
-                if (checkLocationPermission()) {
-                  viewModel.detectCurrentLocation()
-                } else {
-                  locationPermissionLauncher.launch(
-                    arrayOf(
-                      Manifest.permission.ACCESS_FINE_LOCATION,
-                      Manifest.permission.ACCESS_COARSE_LOCATION
-                    )
+            // Offline badge indicator (when disconnected)
+            if (!uiState.isOnline) {
+              Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.9f),
+                modifier = Modifier
+                  .padding(end = 4.dp)
+                  .testTag("appbar_offline_badge")
+              ) {
+                Row(
+                  modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
+                  verticalAlignment = Alignment.CenterVertically
+                ) {
+                  Icon(
+                    imageVector = Icons.Default.CloudOff,
+                    contentDescription = "Offline",
+                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.size(13.dp)
+                  )
+                  Spacer(modifier = Modifier.width(3.dp))
+                  Text(
+                    text = AppLanguageHelper.getString("offline_badge", uiState.appLanguage),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onErrorContainer
                   )
                 }
-              },
-              enabled = !uiState.isDetectingLocation,
-              modifier = Modifier
-                .size(40.dp)
-                .testTag("gps_detect_button")
-            ) {
-              if (uiState.isDetectingLocation) {
-                CircularProgressIndicator(
-                  modifier = Modifier.size(18.dp),
-                  strokeWidth = 2.dp,
-                  color = MaterialTheme.colorScheme.primary
-                )
-              } else {
-                Icon(
-                  imageVector = Icons.Default.MyLocation,
-                  contentDescription = AppLanguageHelper.getString("detect_gps", uiState.appLanguage),
-                  tint = MaterialTheme.colorScheme.primary,
-                  modifier = Modifier.size(20.dp)
-                )
               }
             }
 
-            // City selector button (compact pill)
+            // City & Location selector button (compact pill with GPS detector inside)
             Surface(
               shape = RoundedCornerShape(16.dp),
               color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
@@ -435,26 +471,33 @@ fun PrayerScreen(
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
                 verticalAlignment = Alignment.CenterVertically
               ) {
-                Icon(
-                  imageVector = Icons.Default.LocationOn,
-                  contentDescription = AppLanguageHelper.getString("select_city", uiState.appLanguage),
-                  tint = MaterialTheme.colorScheme.primary,
-                  modifier = Modifier.size(15.dp)
-                )
-                Spacer(modifier = Modifier.width(3.dp))
+                if (uiState.isDetectingLocation) {
+                  CircularProgressIndicator(
+                    modifier = Modifier.size(13.dp),
+                    strokeWidth = 1.5.dp,
+                    color = MaterialTheme.colorScheme.primary
+                  )
+                } else {
+                  Icon(
+                    imageVector = Icons.Default.LocationOn,
+                    contentDescription = AppLanguageHelper.getString("select_city", uiState.appLanguage),
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(15.dp)
+                  )
+                }
+                Spacer(modifier = Modifier.width(4.dp))
                 Text(
                   text = uiState.currentCity.name,
                   style = MaterialTheme.typography.labelSmall,
                   fontWeight = FontWeight.SemiBold,
                   color = MaterialTheme.colorScheme.primary,
                   maxLines = 1,
-                  overflow = TextOverflow.Ellipsis,
-                  modifier = Modifier.widthIn(max = 80.dp)
+                  overflow = TextOverflow.Ellipsis
                 )
               }
             }
 
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(6.dp))
           }
         )
       }
@@ -480,6 +523,79 @@ fun PrayerScreen(
             contentPadding = PaddingValues(vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
           ) {
+            // Immediate Internet Reconnection Banner: shows user that timings were just updated via cloud API
+            if (uiState.justUpdatedFromInternet) {
+              item(key = "internet_restored_banner") {
+                Card(
+                  colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                  ),
+                  shape = RoundedCornerShape(16.dp),
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("internet_restored_banner")
+                ) {
+                  Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                  ) {
+                    Icon(
+                      imageVector = Icons.Default.CloudDone,
+                      contentDescription = null,
+                      tint = MaterialTheme.colorScheme.primary,
+                      modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                      text = AppLanguageHelper.getString("internet_restored_updated", uiState.appLanguage),
+                      style = MaterialTheme.typography.bodyMedium,
+                      fontWeight = FontWeight.SemiBold,
+                      color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                  }
+                }
+              }
+            } else if (!uiState.isOnline) {
+              // Offline status information notice: informs users that offline solar calculations are active and will instantly refresh on internet
+              item(key = "offline_status_hint_card") {
+                Card(
+                  colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+                  ),
+                  shape = RoundedCornerShape(14.dp),
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("offline_status_card")
+                ) {
+                  Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                  ) {
+                    Icon(
+                      imageVector = Icons.Default.CloudOff,
+                      contentDescription = null,
+                      tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                      modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                      Text(
+                        text = AppLanguageHelper.getString("offline_mode_badge", uiState.appLanguage),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                      )
+                      Text(
+                        text = AppLanguageHelper.getString("offline_mode_hint", uiState.appLanguage),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                      )
+                    }
+                  }
+                }
+              }
+            }
+
             // Location Permission Alert (if user denied or hasn't granted location)
             if (!hasLocationPermission) {
               item(key = "location_permission_alert") {
@@ -704,6 +820,21 @@ fun PrayerScreen(
               )
             }
 
+            // RAMADAN IFTAR & SUHOOR SECTION
+            // Appears automatically 1 day before Ramadan and during Ramadan; disappears on the last day of Ramadan
+            if (uiState.isRamadanSeason || uiState.previewRamadanMode) {
+              uiState.ramadanTiming?.let { timing ->
+                item(key = "ramadan_iftar_suhoor_section") {
+                  RamadanIftarSuhoorCard(
+                    ramadanTiming = timing,
+                    appLanguage = uiState.appLanguage,
+                    onToggleSuhoorNotification = { viewModel.toggleSuhoorNotification(it) },
+                    onToggleIftarNotification = { viewModel.toggleIftarNotification(it) }
+                  )
+                }
+              }
+            }
+
             // SEPARATE SECTION: SOLAR EVENTS (SUNRISE & SUNSET)
             item(key = "solar_times_card") {
               SolarTimesCard(
@@ -715,42 +846,25 @@ fun PrayerScreen(
             // Voluntary Prayers Section (Ishraq, Duha, Tahajjud)
             if (uiState.voluntaryPrayers.isNotEmpty()) {
               item(key = "voluntary_section_header") {
-                Row(
+                Column(
                   modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp),
-                  horizontalArrangement = Arrangement.SpaceBetween,
-                  verticalAlignment = Alignment.CenterVertically
+                    .padding(top = 8.dp)
                 ) {
-                  Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                      text = AppLanguageHelper.getString("voluntary_prayers_title", uiState.appLanguage),
-                      style = MaterialTheme.typography.titleMedium,
-                      fontWeight = FontWeight.Bold,
-                      maxLines = 1,
-                      overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                      text = AppLanguageHelper.getString("voluntary_prayers_subtitle", uiState.appLanguage),
-                      style = MaterialTheme.typography.bodySmall,
-                      color = MaterialTheme.colorScheme.onSurfaceVariant,
-                      maxLines = 1,
-                      overflow = TextOverflow.Ellipsis
-                    )
-                  }
-                  Spacer(modifier = Modifier.width(8.dp))
-                  Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.secondaryContainer
-                  ) {
-                    Text(
-                      text = AppLanguageHelper.getString("sunnah_badge", uiState.appLanguage),
-                      style = MaterialTheme.typography.labelSmall,
-                      color = MaterialTheme.colorScheme.onSecondaryContainer,
-                      fontWeight = FontWeight.Bold,
-                      modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                    )
-                  }
+                  Text(
+                    text = AppLanguageHelper.getString("voluntary_prayers_title", uiState.appLanguage),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                  )
+                  Text(
+                    text = AppLanguageHelper.getString("voluntary_prayers_subtitle", uiState.appLanguage),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                  )
                 }
               }
 
@@ -764,6 +878,58 @@ fun PrayerScreen(
                   appLanguage = uiState.appLanguage,
                   onToggleNotification = onTogglePrayer
                 )
+              }
+
+              // Important Special Prayers Card Banner
+              item(key = "important_prayers_banner") {
+                Card(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+                    .clickable { showImportantPrayersDialog = true }
+                    .testTag("home_important_prayers_banner"),
+                  shape = RoundedCornerShape(16.dp),
+                  colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                  )
+                ) {
+                  Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                  ) {
+                    Box(
+                      modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                      contentAlignment = Alignment.Center
+                    ) {
+                      Icon(
+                        imageVector = Icons.Default.MenuBook,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp)
+                      )
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                      Text(
+                        text = AppLanguageHelper.getString("important_prayers", uiState.appLanguage),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                      )
+                      Spacer(modifier = Modifier.height(2.dp))
+                      Text(
+                        text = AppLanguageHelper.getString("important_prayers_sub", uiState.appLanguage),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                      )
+                    }
+                  }
+                }
               }
             }
 
@@ -840,7 +1006,7 @@ fun PrayerScreen(
                     }
                   }
                   Spacer(modifier = Modifier.height(8.dp))
-                  OutlinedButton(
+                    OutlinedButton(
                     onClick = { viewModel.togglePreviewCloseMode() },
                     modifier = Modifier
                       .fillMaxWidth()
@@ -860,6 +1026,8 @@ fun PrayerScreen(
                       fontSize = 13.sp
                     )
                   }
+
+
                 }
               }
             }
@@ -886,6 +1054,16 @@ fun PrayerScreen(
                     }
                     .padding(4.dp)
                     .testTag("the_quran_site_link")
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                  text = "© Ashiqul Haque Borno",
+                  style = MaterialTheme.typography.labelMedium,
+                  fontWeight = FontWeight.Medium,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  modifier = Modifier
+                    .padding(2.dp)
+                    .testTag("copyright_text")
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
@@ -941,6 +1119,25 @@ fun PrayerScreen(
     )
   }
 
+  // Custom Alert Sound Selector Dialog
+  if (showCustomAlertSoundDialog) {
+    CustomAlertSoundDialog(
+      appLanguage = uiState.appLanguage,
+      onDismiss = { showCustomAlertSoundDialog = false }
+    )
+  }
+
+  // Tasbeeh Counter Dialog
+  if (showTasbeehDialog || uiState.showTasbeehDialog) {
+    TasbeehDialog(
+      appLanguage = uiState.appLanguage,
+      onDismiss = {
+        showTasbeehDialog = false
+        viewModel.closeTasbeeh()
+      }
+    )
+  }
+
   // Qibla Compass Dialog
   if (showQiblaCompass) {
     QiblaCompassDialog(
@@ -955,6 +1152,7 @@ fun PrayerScreen(
     CitySelectionDialog(
       currentCity = uiState.currentCity,
       appLanguage = uiState.appLanguage,
+      isDetectingLocation = uiState.isDetectingLocation,
       onSelectGps = {
         showCityDialog = false
         if (checkLocationPermission()) {
@@ -981,6 +1179,14 @@ fun PrayerScreen(
     HijriCalendarDialog(
       appLanguage = uiState.appLanguage,
       onDismiss = { showHijriCalendarDialog = false }
+    )
+  }
+
+  // Important Special Prayers (কিছু গুরুত্বপূর্ণ সালাত)
+  if (showImportantPrayersDialog) {
+    ImportantPrayersDialog(
+      initialLanguage = uiState.appLanguage,
+      onDismiss = { showImportantPrayersDialog = false }
     )
   }
 
@@ -1881,7 +2087,10 @@ fun NextPrayerHeroCard(
               color = if (isForbidden) Color(0xFFFECACA) else Color(0xFFFDE047),
               fontWeight = FontWeight.SemiBold,
               maxLines = 1,
-              softWrap = false
+              softWrap = false,
+              modifier = Modifier
+                .fillMaxWidth()
+                .basicMarquee(iterations = Int.MAX_VALUE)
             )
 
             if (!isForbidden && !showUpcomingOnTop && topPrayer?.type == PrayerType.TAHAJJUD) {
@@ -2314,6 +2523,11 @@ fun BatteryArchitectureCard(
         title = AppLanguageHelper.getString("battery_bullet_3_title", appLanguage),
         desc = "${AppLanguageHelper.getString("battery_bullet_3_desc", appLanguage)} ($syncSource - $lastSynced)"
       )
+      Spacer(modifier = Modifier.height(4.dp))
+      ArchitectureBullet(
+        title = AppLanguageHelper.getString("battery_bullet_4_title", appLanguage),
+        desc = AppLanguageHelper.getString("battery_bullet_4_desc", appLanguage)
+      )
     }
   }
 }
@@ -2391,181 +2605,187 @@ fun PrayerRowCard(
     Row(
       modifier = Modifier
         .fillMaxWidth()
-        .padding(horizontal = 14.dp, vertical = 12.dp),
-      verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.SpaceBetween
+        .padding(horizontal = 12.dp, vertical = 10.dp),
+      verticalAlignment = Alignment.CenterVertically
     ) {
-      Row(
-        modifier = Modifier.weight(1f),
-        verticalAlignment = Alignment.CenterVertically
+      Box(
+        modifier = Modifier
+          .size(36.dp)
+          .clip(CircleShape)
+          .background(
+            when {
+              isHighlighted -> MaterialTheme.colorScheme.primary
+              isCurrent -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+              else -> MaterialTheme.colorScheme.surfaceVariant
+            }
+          ),
+        contentAlignment = Alignment.Center
       ) {
-        Box(
-          modifier = Modifier
-            .size(38.dp)
-            .clip(CircleShape)
-            .background(
-              when {
-                isHighlighted -> MaterialTheme.colorScheme.primary
-                isCurrent -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                else -> MaterialTheme.colorScheme.surfaceVariant
-              }
-            ),
-          contentAlignment = Alignment.Center
+        Icon(
+          imageVector = icon,
+          contentDescription = localizedName,
+          tint = when {
+            isHighlighted -> MaterialTheme.colorScheme.onPrimary
+            isCurrent -> MaterialTheme.colorScheme.primary
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
+          },
+          modifier = Modifier.size(18.dp)
+        )
+      }
+
+      Spacer(modifier = Modifier.width(10.dp))
+
+      Column(
+        modifier = Modifier.weight(1f)
+      ) {
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          modifier = Modifier.fillMaxWidth()
         ) {
-          Icon(
-            imageVector = icon,
-            contentDescription = localizedName,
-            tint = when {
-              isHighlighted -> MaterialTheme.colorScheme.onPrimary
-              isCurrent -> MaterialTheme.colorScheme.primary
-              else -> MaterialTheme.colorScheme.onSurfaceVariant
-            },
-            modifier = Modifier.size(20.dp)
+          Text(
+            text = localizedName,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = if (isHighlighted || isCurrent) FontWeight.Bold else FontWeight.Medium,
+            color = textColor,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false)
           )
+          if (isHighlighted) {
+            Surface(
+              shape = RoundedCornerShape(5.dp),
+              color = MaterialTheme.colorScheme.primary,
+              modifier = Modifier.padding(start = 5.dp)
+            ) {
+              Text(
+                text = AppLanguageHelper.getString("next_badge", appLanguage),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onPrimary,
+                fontWeight = FontWeight.Bold,
+                fontSize = 9.sp,
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
+              )
+            }
+          } else if (isCurrent) {
+            Surface(
+              shape = RoundedCornerShape(5.dp),
+              color = MaterialTheme.colorScheme.secondary,
+              modifier = Modifier.padding(start = 5.dp)
+            ) {
+              Text(
+                text = AppLanguageHelper.getString("current_badge", appLanguage),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSecondary,
+                fontWeight = FontWeight.Bold,
+                fontSize = 9.sp,
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
+              )
+            }
+          }
+          if (prayer.isMakruh) {
+            Surface(
+              shape = RoundedCornerShape(5.dp),
+              color = Color(0xFFD97706),
+              modifier = Modifier.padding(start = 5.dp)
+            ) {
+              Text(
+                text = AppLanguageHelper.getString("makruh_badge", appLanguage),
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 9.sp,
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
+              )
+            }
+          }
+        }
+        val bottomText = when {
+          prayer.isMakruh -> AppLanguageHelper.getString("isha_makruh_desc", appLanguage)
+          isCurrent -> "${AppLanguageHelper.getString("current_prayer_prefix", appLanguage)}$localizedDesc"
+          localizedDesc.isNotEmpty() -> if (isPassed) "${AppLanguageHelper.getString("passed_prefix", appLanguage)}$localizedDesc" else localizedDesc
+          isPassed -> AppLanguageHelper.getString("passed_label", appLanguage)
+          else -> ""
         }
 
-        Spacer(modifier = Modifier.width(12.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-          Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-              text = localizedName,
-              style = MaterialTheme.typography.titleMedium,
-              fontWeight = if (isHighlighted || isCurrent) FontWeight.Bold else FontWeight.Medium,
-              color = textColor,
-              maxLines = 1,
-              overflow = TextOverflow.Ellipsis
-            )
-            if (isHighlighted) {
-              Spacer(modifier = Modifier.width(6.dp))
-              Surface(
-                shape = RoundedCornerShape(6.dp),
-                color = MaterialTheme.colorScheme.primary
-              ) {
-                Text(
-                  text = AppLanguageHelper.getString("next_badge", appLanguage),
-                  style = MaterialTheme.typography.labelSmall,
-                  color = MaterialTheme.colorScheme.onPrimary,
-                  fontWeight = FontWeight.Bold,
-                  fontSize = 10.sp,
-                  modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-              }
-            } else if (isCurrent) {
-              Spacer(modifier = Modifier.width(6.dp))
-              Surface(
-                shape = RoundedCornerShape(6.dp),
-                color = MaterialTheme.colorScheme.secondary
-              ) {
-                Text(
-                  text = AppLanguageHelper.getString("current_badge", appLanguage),
-                  style = MaterialTheme.typography.labelSmall,
-                  color = MaterialTheme.colorScheme.onSecondary,
-                  fontWeight = FontWeight.Bold,
-                  fontSize = 10.sp,
-                  modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-              }
-            }
-            if (prayer.isMakruh) {
-              Spacer(modifier = Modifier.width(6.dp))
-              Surface(
-                shape = RoundedCornerShape(6.dp),
-                color = Color(0xFFD97706)
-              ) {
-                Text(
-                  text = AppLanguageHelper.getString("makruh_badge", appLanguage),
-                  style = MaterialTheme.typography.labelSmall,
-                  color = Color.White,
-                  fontWeight = FontWeight.Bold,
-                  fontSize = 10.sp,
-                  modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-              }
-            }
-          }
-          val bottomText = when {
-            prayer.isMakruh -> AppLanguageHelper.getString("isha_makruh_desc", appLanguage)
-            isCurrent -> "${AppLanguageHelper.getString("current_prayer_prefix", appLanguage)}$localizedDesc"
-            localizedDesc.isNotEmpty() -> if (isPassed) "${AppLanguageHelper.getString("passed_prefix", appLanguage)}$localizedDesc" else localizedDesc
-            isPassed -> AppLanguageHelper.getString("passed_label", appLanguage)
-            else -> ""
-          }
-
-          if (bottomText.isNotEmpty()) {
-            Text(
-              text = bottomText,
-              style = MaterialTheme.typography.labelSmall,
-              color = if (isCurrent) MaterialTheme.colorScheme.primary else textColor.copy(alpha = if (isPassed) 0.6f else 0.65f),
-              fontWeight = if (isCurrent) FontWeight.Medium else FontWeight.Normal,
-              maxLines = 1,
-              softWrap = false,
-              modifier = Modifier
-                .fillMaxWidth()
-                .basicMarquee(iterations = Int.MAX_VALUE)
-            )
-          }
+        if (bottomText.isNotEmpty()) {
+          Text(
+            text = bottomText,
+            style = MaterialTheme.typography.labelSmall,
+            color = if (isCurrent) MaterialTheme.colorScheme.primary else textColor.copy(alpha = if (isPassed) 0.6f else 0.65f),
+            fontWeight = if (isCurrent) FontWeight.Medium else FontWeight.Normal,
+            maxLines = 1,
+            softWrap = false,
+            modifier = Modifier
+              .fillMaxWidth()
+              .basicMarquee(iterations = Int.MAX_VALUE)
+          )
         }
       }
 
       Spacer(modifier = Modifier.width(8.dp))
 
-      Row(
-        verticalAlignment = Alignment.CenterVertically
+      Column(
+        horizontalAlignment = Alignment.End
       ) {
-        Column(
-          horizontalAlignment = Alignment.End
-        ) {
+        Text(
+          text = localizedTime.replace(" ", "\u00A0"),
+          style = MaterialTheme.typography.titleMedium,
+          fontWeight = FontWeight.Bold,
+          color = textColor,
+          maxLines = 1,
+          softWrap = false,
+          modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE)
+        )
+        if (!prayer.endTimeFormatted.isNullOrEmpty()) {
+          val localizedEndTime = AppLanguageHelper.localizeTime(prayer.endTimeFormatted, appLanguage)
           Text(
-            text = localizedTime.replace(" ", "\u00A0"),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = textColor,
+            text = "${AppLanguageHelper.getString("ends_at_label", appLanguage)} $localizedEndTime".replace(" ", "\u00A0"),
+            style = MaterialTheme.typography.labelSmall,
+            color = textColor.copy(alpha = if (isPassed) 0.55f else 0.75f),
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Medium,
             maxLines = 1,
-            softWrap = false
+            softWrap = false,
+            modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE)
           )
-          if (!prayer.endTimeFormatted.isNullOrEmpty()) {
-            val localizedEndTime = AppLanguageHelper.localizeTime(prayer.endTimeFormatted, appLanguage)
-            Text(
-              text = "${AppLanguageHelper.getString("ends_at_label", appLanguage)} $localizedEndTime".replace(" ", "\u00A0"),
-              style = MaterialTheme.typography.labelSmall,
-              color = textColor.copy(alpha = if (isPassed) 0.55f else 0.75f),
-              fontSize = 10.sp,
-              fontWeight = FontWeight.Medium,
-              maxLines = 1,
-              softWrap = false
-            )
-          }
         }
+      }
 
-        Spacer(modifier = Modifier.width(6.dp))
-        Box(
-          modifier = Modifier.size(40.dp),
-          contentAlignment = Alignment.Center
+      Spacer(modifier = Modifier.width(6.dp))
+
+      Box(
+        modifier = Modifier.size(36.dp),
+        contentAlignment = Alignment.Center
+      ) {
+        Surface(
+          shape = CircleShape,
+          color = if (prayer.notificationEnabled) {
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+          } else {
+            if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) Color(0x24FFFFFF) else Color(0x12000000)
+          },
+          modifier = Modifier
+            .size(34.dp)
+            .clip(CircleShape)
+            .clickable { onToggleNotification(prayer.type.displayName, !prayer.notificationEnabled) }
+            .testTag("prayer_notif_toggle_${prayer.type.name.lowercase()}")
         ) {
-          Surface(
-            shape = CircleShape,
-            color = if (prayer.notificationEnabled) {
-              MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
-            } else {
-              if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) Color(0x24FFFFFF) else Color(0x12000000)
-            },
-            modifier = Modifier
-              .size(36.dp)
-              .clip(CircleShape)
-              .clickable { onToggleNotification(prayer.type.displayName, !prayer.notificationEnabled) }
-              .testTag("prayer_notif_toggle_${prayer.type.name.lowercase()}")
-          ) {
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-              Icon(
-                imageVector = if (prayer.notificationEnabled) Icons.Default.Notifications
-                              else Icons.Default.NotificationsOff,
-                contentDescription = "Toggle alert for $localizedName",
-                tint = if (prayer.notificationEnabled) MaterialTheme.colorScheme.primary
-                       else textColor.copy(alpha = 0.75f),
-                modifier = Modifier.size(20.dp)
-              )
-            }
+          Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+            Icon(
+              imageVector = if (prayer.notificationEnabled) Icons.Default.Notifications
+                            else Icons.Default.NotificationsOff,
+              contentDescription = "Toggle alert for $localizedName",
+              tint = if (prayer.notificationEnabled) MaterialTheme.colorScheme.primary
+                     else textColor.copy(alpha = 0.75f),
+              modifier = Modifier.size(18.dp)
+            )
           }
         }
       }
@@ -2577,6 +2797,7 @@ fun PrayerRowCard(
 fun CitySelectionDialog(
   currentCity: CityLocation,
   appLanguage: String = "en",
+  isDetectingLocation: Boolean = false,
   onSelectGps: () -> Unit,
   onSelect: (CityLocation) -> Unit,
   onDismiss: () -> Unit
@@ -2615,7 +2836,7 @@ fun CitySelectionDialog(
           .fillMaxWidth()
           .height(440.dp)
       ) {
-        // GPS Auto-detect card
+        // GPS Auto-detect card (with active location detector)
         Card(
           onClick = onSelectGps,
           colors = CardDefaults.cardColors(
@@ -2638,12 +2859,20 @@ fun CitySelectionDialog(
                 .background(MaterialTheme.colorScheme.primary),
               contentAlignment = Alignment.Center
             ) {
-              Icon(
-                imageVector = Icons.Default.MyLocation,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier.size(18.dp)
-              )
+              if (isDetectingLocation) {
+                CircularProgressIndicator(
+                  modifier = Modifier.size(18.dp),
+                  strokeWidth = 2.dp,
+                  color = MaterialTheme.colorScheme.onPrimary
+                )
+              } else {
+                Icon(
+                  imageVector = Icons.Default.MyLocation,
+                  contentDescription = null,
+                  tint = MaterialTheme.colorScheme.onPrimary,
+                  modifier = Modifier.size(18.dp)
+                )
+              }
             }
             Spacer(modifier = Modifier.width(10.dp))
             Column {
@@ -2654,7 +2883,8 @@ fun CitySelectionDialog(
                 color = MaterialTheme.colorScheme.onPrimaryContainer
               )
               Text(
-                text = AppLanguageHelper.getString("auto_detect_gps", appLanguage),
+                text = if (isDetectingLocation) AppLanguageHelper.getString("detecting_location", appLanguage)
+                       else AppLanguageHelper.getString("auto_detect_gps", appLanguage),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
               )
@@ -2820,7 +3050,10 @@ fun PrayerSideMenuContent(
   onDetectGps: () -> Unit,
   onOpenQibla: () -> Unit,
   onOpenHijriCalendar: () -> Unit,
+  onOpenImportantPrayers: () -> Unit,
   onOpenTheme: () -> Unit,
+  onOpenAlertSound: () -> Unit,
+  onOpenTasbeeh: () -> Unit,
   onCheckUpdates: () -> Unit,
   onReportBug: () -> Unit,
   onTestNotification: () -> Unit,
@@ -3088,6 +3321,54 @@ fun PrayerSideMenuContent(
         )
       }
 
+      // 7. Important Special Prayers (কিছু গুরুত্বপূর্ণ সালাত)
+      item(key = "drawer_important_prayers") {
+        NavigationDrawerItem(
+          icon = {
+            Icon(
+              imageVector = Icons.Default.MenuBook,
+              contentDescription = "Important Prayers",
+              tint = MaterialTheme.colorScheme.primary
+            )
+          },
+          label = {
+            Column {
+              Text(
+                text = AppLanguageHelper.getString("important_prayers", lang),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold
+              )
+              Text(
+                text = AppLanguageHelper.getString("important_prayers_sub", lang),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary
+              )
+            }
+          },
+          badge = {
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = Color(0xFF047857).copy(alpha = 0.15f)
+            ) {
+              Text(
+                text = when (lang) {
+                  "bn" -> "আমল"
+                  "ar" -> "دعاء"
+                  else -> "Duas"
+                },
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF047857),
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+              )
+            }
+          },
+          selected = false,
+          onClick = onOpenImportantPrayers,
+          modifier = Modifier.testTag("drawer_item_important_prayers")
+        )
+      }
+
       // 7. Theme & Appearance
       item(key = "drawer_theme") {
         NavigationDrawerItem(
@@ -3107,6 +3388,113 @@ fun PrayerSideMenuContent(
           selected = false,
           onClick = onOpenTheme,
           modifier = Modifier.testTag("drawer_item_theme")
+        )
+      }
+
+      // 8. Custom Alert Sound Selector
+      item(key = "drawer_alert_sound") {
+        val soundContext = LocalContext.current
+        val isCustomSound = AlertSoundManager.isCustomSoundEnabled(soundContext)
+        val customSoundName = AlertSoundManager.getCustomSoundName(soundContext)
+
+        NavigationDrawerItem(
+          icon = {
+            Icon(
+              imageVector = Icons.Default.Audiotrack,
+              contentDescription = "Alert Sound",
+              tint = if (isCustomSound) Color(0xFF047857) else MaterialTheme.colorScheme.primary
+            )
+          },
+          label = {
+            Column {
+              Text(
+                text = AppLanguageHelper.getString("custom_alert_sound", lang),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold
+              )
+              Text(
+                text = if (isCustomSound) {
+                  customSoundName ?: "custom_alert.mp3"
+                } else {
+                  AppLanguageHelper.getString("system_default_sound", lang)
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = if (isCustomSound) Color(0xFF047857) else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+              )
+            }
+          },
+          badge = {
+            if (isCustomSound) {
+              Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0xFF047857).copy(alpha = 0.15f)
+              ) {
+                Text(
+                  text = "MP3",
+                  style = MaterialTheme.typography.labelSmall,
+                  fontWeight = FontWeight.Bold,
+                  color = Color(0xFF047857),
+                  modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+              }
+            }
+          },
+          selected = false,
+          onClick = onOpenAlertSound,
+          modifier = Modifier.testTag("drawer_item_alert_sound")
+        )
+      }
+
+      // 9. Tasbeeh Counter
+      item(key = "drawer_tasbeeh") {
+        val tasbeehContext = LocalContext.current
+        val currentCount = com.example.util.TasbeehPreferences.getCount(tasbeehContext)
+        val currentDhikr = com.example.util.TasbeehPreferences.getCurrentDhikr(tasbeehContext)
+
+        NavigationDrawerItem(
+          icon = {
+            Icon(
+              painter = painterResource(id = R.drawable.ic_tasbeeh),
+              contentDescription = "Tasbeeh",
+              tint = Color(0xFF047857),
+              modifier = Modifier.size(22.dp)
+            )
+          },
+          label = {
+            Column {
+              Text(
+                text = AppLanguageHelper.getString("tasbeeh_counter", lang),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold
+              )
+              Text(
+                text = "${currentDhikr.arabic} • $currentCount",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFF047857),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+              )
+            }
+          },
+          badge = {
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = Color(0xFF047857).copy(alpha = 0.15f)
+            ) {
+              Text(
+                text = "$currentCount",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF047857),
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+              )
+            }
+          },
+          selected = false,
+          onClick = onOpenTasbeeh,
+          modifier = Modifier.testTag("drawer_item_tasbeeh")
         )
       }
 
@@ -3193,7 +3581,7 @@ fun PrayerSideMenuContent(
       horizontalAlignment = Alignment.CenterHorizontally
     ) {
       Text(
-        text = "The Quran Site • Ashiqul Haque Borno",
+        text = "The Quran Site",
         style = MaterialTheme.typography.bodySmall,
         fontWeight = FontWeight.Medium,
         color = MaterialTheme.colorScheme.onSurfaceVariant

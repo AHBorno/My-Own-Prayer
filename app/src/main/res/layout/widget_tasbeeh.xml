@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <!-- Header Row -->
+    <LinearLayout
+        android:id="@+id/widget_header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:contentDescription="Tasbeeh"
+            android:src="@drawable/ic_tasbeeh" />
+
+        <TextView
+            android:id="@+id/widget_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="Tasbeeh"
+            android:textColor="#34D399"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <!-- Switch Dhikr Button -->
+        <ImageButton
+            android:id="@+id/btn_widget_swap_dhikr"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:background="@drawable/widget_small_btn"
+            android:contentDescription="Next Dhikr"
+            android:padding="5dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_widget_swap" />
+
+        <!-- Reset Counter Button -->
+        <ImageButton
+            android:id="@+id/btn_widget_reset"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/widget_small_btn"
+            android:contentDescription="Reset"
+            android:padding="5dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_widget_refresh" />
+    </LinearLayout>
+
+    <!-- Dhikr Arabic & Meaning Area -->
+    <LinearLayout
+        android:id="@+id/widget_dhikr_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:gravity="center"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/widget_dhikr_arabic"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:gravity="center"
+            android:maxLines="1"
+            android:text="سُبْحَانَ ٱللَّٰهِ"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_dhikr_transliteration"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:gravity="center"
+            android:maxLines="1"
+            android:text="SubhanAllah"
+            android:textColor="#94A3B8"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <!-- Center Interactive Area: Count & Increment Button -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <!-- Count Display -->
+        <LinearLayout
+            android:id="@+id/widget_count_container"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/widget_count_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:text="0"
+                android:textColor="#10B981"
+                android:textSize="36sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_subtext"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Target: 33 • R 0"
+                android:textColor="#64748B"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Tap to Increment Button -->
+        <ImageButton
+            android:id="@+id/btn_widget_increment"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_marginEnd="6dp"
+            android:background="@drawable/widget_circle_btn"
+            android:contentDescription="Count +1"
+            android:padding="12dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_widget_add" />
+    </LinearLayout>
+
+</LinearLayout>

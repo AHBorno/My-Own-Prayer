@@ -17,8 +17,8 @@ android {
     applicationId = "com.theQuranSite.pray"
     minSdk = 24
     targetSdk = 36
-    versionCode = 3
-    versionName = "1.2 Beta"
+    versionCode = 4
+    versionName = "1.3 Beta"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

@@ -254,7 +254,29 @@ object AppLanguageHelper {
     }
   }
 
-  fun getNotificationTitle(prayerName: String, prayerTime: String, lang: String): String {
+  fun getNotificationTitle(
+    prayerName: String,
+    prayerTime: String,
+    lang: String,
+    isRamadan: Boolean = false
+  ): String {
+    if (isRamadan) {
+      if (prayerName.equals("Maghrib", ignoreCase = true)) {
+        val locTime = localizeTime(prayerTime, lang)
+        return when (lang) {
+          LANG_BN -> "✨ ইফতারের সময় (মাগরিব) ($locTime)"
+          LANG_AR -> "✨ موعد الإفطار (المغرب) ($locTime)"
+          else -> "✨ Iftar time (Maghrib) ($prayerTime)"
+        }
+      } else if (prayerName.equals("Fajr", ignoreCase = true)) {
+        val locTime = localizeTime(prayerTime, lang)
+        return when (lang) {
+          LANG_BN -> "⏳ সেহরির সময় শেষ (ফজর) ($locTime)"
+          LANG_AR -> "⏳ نهاية وقت السحور (الفجر) ($locTime)"
+          else -> "⏳ Suhoor Ended (Fajr) ($prayerTime)"
+        }
+      }
+    }
     val localizedName = getPrayerDisplayName(prayerName, lang)
     val localizedTimeStr = localizeTime(prayerTime, lang)
     return when (lang) {
@@ -272,7 +294,16 @@ object AppLanguageHelper {
     }
   }
 
-  fun getPrayerQuote(prayerName: String, lang: String): String {
+  fun getPrayerQuote(prayerName: String, lang: String, isRamadan: Boolean = false): String {
+    if (isRamadan) {
+      if (prayerName.equals("Maghrib", ignoreCase = true)) {
+        return when (lang) {
+          LANG_BN -> "পিপাসা দূরীভূত হলো, শিরা-উপশিরা সিক্ত হলো এবং ইনশাআল্লাহ সওয়াব নির্ধারিত হলো। (আবু দাউদ ২৩৫৭)"
+          LANG_AR -> "ذَهَبَ الظَّمَأُ وَابْتَلَّتِ الْعُرُوقُ وَثَبَتَ الأَجْرُ إِنْ شَاءَ اللَّهُ (أبو داود)"
+          else -> "The thirst is gone, the veins are moistened, and the reward is confirmed, if Allah wills. (Abu Dawud)"
+        }
+      }
+    }
     val key = prayerName.lowercase()
     return when (lang) {
       LANG_BN -> when (key) {
@@ -333,6 +364,99 @@ object AppLanguageHelper {
     }
   }
 
+  fun getRamadanNotificationTitle(eventType: String, lang: String): String {
+    return when (eventType) {
+      "SUHOOR_SOON" -> when (lang) {
+        LANG_BN -> "🌙 সাহরির শেষ সময় আসন্ন (~১৫ মিনিট)"
+        LANG_AR -> "🌙 قرب انتهاء وقت السحور (~١٥ دقيقة)"
+        else -> "🌙 Suhoor Ending Soon (~15 Mins)"
+      }
+      "SUHOOR_EXACT" -> when (lang) {
+        LANG_BN -> "⏳ সাহরির সময় সমাপ্ত (ফজর শুরু)"
+        LANG_AR -> "⏳ انتهى وقت السحور (بدأ الفجر)"
+        else -> "⏳ Suhoor Ended (Fajr Begins)"
+      }
+      "IFTAR_SOON" -> when (lang) {
+        LANG_BN -> "🤲 ইফতারের প্রস্তুতি নিন (~১৪ মিনিট বাকি)"
+        LANG_AR -> "🤲 اقترب موعد الإفطار (~١٤ دقيقة)"
+        else -> "🤲 Iftar Approaching (~14 Mins)"
+      }
+      "IFTAR_EXACT" -> when (lang) {
+        LANG_BN -> "✨ ইফতারের সময় হয়েছে — আলহামদুলিল্লাহ!"
+        LANG_AR -> "✨ حان موعد الإفطار — تقبل الله!"
+        else -> "✨ It is Time for Iftar — Alhamdulillah!"
+      }
+      else -> "Ramadan Reminder"
+    }
+  }
+
+  fun getRamadanAlertTitle(alertType: String, lang: String): String {
+    return when (alertType) {
+      "IFTAR_SOON" -> when (lang) {
+        LANG_BN -> "🤲 ইফতারের প্রস্তুতি নিন (~১৪ মিনিট বাকি)"
+        LANG_AR -> "🤲 اقترب موعد الإفطار (~١٤ دقيقة)"
+        else -> "🤲 Iftar soon (~14 mins)"
+      }
+      "SUHOOR_END_SOON", "SUHOOR_SOON" -> when (lang) {
+        LANG_BN -> "🌙 সেহরির শেষ সময় আসন্ন (~১৫ মিনিট)"
+        LANG_AR -> "🌙 قرب انتهاء وقت السحور (~١٥ دقيقة)"
+        else -> "🌙 Suhoor end soon (~15 mins)"
+      }
+      else -> getRamadanNotificationTitle(alertType, lang)
+    }
+  }
+
+  fun getRamadanAlertBody(alertType: String, targetTime: String, lang: String): String {
+    return getRamadanNotificationBody(alertType, targetTime, lang)
+  }
+
+  fun getRamadanNotificationBody(
+    eventType: String,
+    timeFormatted: String,
+    lang: String
+  ): String {
+    val locTime = localizeTime(timeFormatted, lang)
+    return when (eventType) {
+      "SUHOOR_SOON" -> when (lang) {
+        LANG_BN -> "সাহরি শেষ হতে প্রায় ১৫ মিনিট বাকি ($locTime)। পানাহার সমাপ্ত করে রোযার নিয়ত করুন।"
+        LANG_AR -> "متبقي نحو ١٥ دقيقة على انتهاء وقت السحور ($locTime). بادر بإنهاء سحورك والاستعداد للصيام."
+        else -> "Suhoor ends in about 15 minutes ($locTime). Complete your meal and prepare for fasting."
+      }
+      "SUHOOR_EXACT" -> when (lang) {
+        LANG_BN -> "সাহরির সময় সমাপ্ত হয়েছে ($locTime)। ফজরের ওয়াক্ত শুরু এবং আজকের রোযা শুরু হলো।"
+        LANG_AR -> "انتهى وقت السحور الآن ($locTime). حان وقت أذان الفجر وبدأ صيام اليوم المبارك."
+        else -> "Suhoor time has ended ($locTime). Fajr has begun and today's fast starts now."
+      }
+      "IFTAR_SOON" -> when (lang) {
+        LANG_BN -> "ইফতারের আর মাত্র ১৪ মিনিট বাকি ($locTime)। ইফতার সামনে নিয়ে বেশি বেশি ইস্তিগফার ও দোয়া করুন।"
+        LANG_AR -> "متبقي نحو ١٤ دقيقة على موعد الإفطار ($locTime). هذا وقت استجابة الدعاء فأكثر من التضرع والاستغفار."
+        else -> "About 14 minutes remaining until Iftar ($locTime). A blessed time for making heartfelt dua."
+      }
+      "IFTAR_EXACT" -> when (lang) {
+        LANG_BN -> "সূর্যাস্ত হয়েছে ($locTime)। দোয়া পড়ে ইফতার করুন: 'যাহাবায জামাউ ওয়াবতাল্লাতিল উরূক্বু ওয়া ছাবাতাল আজরু ইনশাআল্লাহ'।"
+        LANG_AR -> "حان الآن موعد الإفطار ($locTime): ذهب الظمأ وابتلت العروق وثبت الأجر إن شاء الله."
+        else -> "The sun has set ($locTime). Break your fast: 'Dhahaba adh-dhama'u wabtallat al-'urooq wa thabat al-ajru insha'Allah'."
+      }
+      else -> "Time: $locTime"
+    }
+  }
+
+  fun getEidMubarakNotificationTitle(lang: String): String {
+    return when (lang) {
+      LANG_BN -> "🌙 ঈদ মোবারক! (Eid Mubarak)"
+      LANG_AR -> "🌙 عيد فطر مبارك!"
+      else -> "🌙 Eid Mubarak!"
+    }
+  }
+
+  fun getEidMubarakNotificationBody(lang: String): String {
+    return when (lang) {
+      LANG_BN -> "তাক্বাব্বালাল্লাহু মিন্না ওয়া মিনকুম। পবিত্র মাহে রমজানের সিয়াম সাধনার পর আপনার ও আপনার পরিবারের জন্য আনন্দময় এবং বরকতময় ঈদের শুভেচ্ছা।"
+      LANG_AR -> "تقبل الله منا ومنكم صالح الأعمال والطاعات، وكل عام وأنتم بخير بمناسبة حلول عيد الفطر المبارك."
+      else -> "Taqabbal Allahu minna wa minkum. Wishing you and your loved ones a blessed, joyful, and peaceful Eid al-Fitr!"
+    }
+  }
+
   /**
    * General UI Strings.
    * NOTE: The app name NEVER changes regardless of language selection.
@@ -355,9 +479,35 @@ object AppLanguageHelper {
       "qibla_compass" -> when (lang) { LANG_BN -> "কিবলা কম্পাস"; LANG_AR -> "بوصلة القبلة"; else -> "Qibla Compass" }
       "select_city" -> when (lang) { LANG_BN -> "শহর নির্বাচন"; LANG_AR -> "تحديد المدينة"; else -> "Select City" }
       "check_updates" -> when (lang) { LANG_BN -> "আপডেট পরীক্ষা করুন"; LANG_AR -> "التحقق من التحديثات"; else -> "Check for Updates" }
+      "tasbeeh_counter" -> when (lang) { LANG_BN -> "তাসবিহ কাউন্টার"; LANG_AR -> "المسبحة الإلكترونية"; else -> "Tasbeeh Counter" }
+      "tasbeeh_counter_sub" -> when (lang) { LANG_BN -> "ডিজিটাল তাসবিহ ও জিকির গণনা"; LANG_AR -> "عداد الأذكار والتسبيح اليومي"; else -> "Digital Dhikr & Tasbeeh Counter" }
+      "add_widget_to_home" -> when (lang) { LANG_BN -> "হোম স্ক্রিনে উইজেট যুক্ত করুন"; LANG_AR -> "إضافة الأداة للشاشة الرئيسية"; else -> "Add Widget to Home Screen" }
+      "widget_added_success" -> when (lang) { LANG_BN -> "হোম স্ক্রিনে উইজেট পিন করার অনুরোধ পাঠানো হয়েছে!"; LANG_AR -> "تم إرسال طلب إضافة الأداة للشاشة الرئيسية!"; else -> "Widget pin request sent to Home Screen!" }
+      "widget_manual_guide" -> when (lang) { LANG_BN -> "আপনার হোম স্ক্রিনের ফাঁকা জায়গায় লং-প্রেস করে উইজেটটি যুক্ত করুন"; LANG_AR -> "اضغط مطولاً على الشاشة الرئيسية لإضافة الأداة يدوياً"; else -> "Long press on your home screen to add the Tasbeeh widget" }
+      "target" -> when (lang) { LANG_BN -> "লক্ষ্য"; LANG_AR -> "الهدف"; else -> "Target" }
+      "rounds" -> when (lang) { LANG_BN -> "রাউন্ড"; LANG_AR -> "الجولات"; else -> "Rounds" }
+      "total_dhikr" -> when (lang) { LANG_BN -> "সর্বমোট জিকির"; LANG_AR -> "مجموع التسبيحات"; else -> "Total Dhikr" }
+      "reset_counter" -> when (lang) { LANG_BN -> "কাউন্টার রিসেট"; LANG_AR -> "إعادة ضبط"; else -> "Reset Counter" }
+      "reset_all" -> when (lang) { LANG_BN -> "সব রিসেট"; LANG_AR -> "إعادة ضبط الكل"; else -> "Reset All" }
+      "tap_to_count" -> when (lang) { LANG_BN -> "গণনা করতে চাপুন"; LANG_AR -> "اضغط للتسبيح"; else -> "Tap to Count" }
+      "vibration" -> when (lang) { LANG_BN -> "ভাইব্রেশন"; LANG_AR -> "الاهتزاز"; else -> "Vibration" }
+      "sound" -> when (lang) { LANG_BN -> "সাউন্ড"; LANG_AR -> "الصوت"; else -> "Sound" }
+      "select_dhikr" -> when (lang) { LANG_BN -> "জিকির নির্বাচন করুন"; LANG_AR -> "اختر الذكر"; else -> "Select Dhikr" }
+      "unlimited" -> when (lang) { LANG_BN -> "আনলিমিটেড"; LANG_AR -> "غير محدود"; else -> "Unlimited" }
+      "custom_alert_sound" -> when (lang) { LANG_BN -> "কাস্টম এলার্ট সাউন্ড"; LANG_AR -> "صوت التنبيه المخصص"; else -> "Custom Alert Sound" }
+      "custom_alert_sound_sub" -> when (lang) { LANG_BN -> "নোটিফিকেশনের জন্য নিজস্ব MP3 সাউন্ড সেট করুন"; LANG_AR -> "تعيين ملف MP3 مخصص لإشعارات الصلاة"; else -> "Set custom MP3 sound for prayer notifications" }
+      "select_mp3_sound" -> when (lang) { LANG_BN -> "MP3 ফাইল নির্বাচন করুন"; LANG_AR -> "اختر ملف MP3"; else -> "Select MP3 File" }
+      "preview_sound" -> when (lang) { LANG_BN -> "সাউন্ড শুনুন"; LANG_AR -> "تشغيل الصوت"; else -> "Preview Sound" }
+      "stop_sound" -> when (lang) { LANG_BN -> "সাউন্ড বন্ধ করুন"; LANG_AR -> "إيقاف الصوت"; else -> "Stop Sound" }
+      "reset_to_default_sound" -> when (lang) { LANG_BN -> "ডিফল্ট সাউন্ডে ফিরে যান"; LANG_AR -> "استعادة الصوت الافتراضي"; else -> "Reset to Default Sound" }
+      "system_default_sound" -> when (lang) { LANG_BN -> "সিস্টেম ডিফল্ট সাউন্ড"; LANG_AR -> "نغمة النظام الافتراضية"; else -> "System Default Sound" }
+      "sound_set_success" -> when (lang) { LANG_BN -> "কাস্টম এলার্ট সাউন্ড সফলভাবে সেট করা হয়েছে!"; LANG_AR -> "تم تعيين صوت التنبيه بنجاح!"; else -> "Custom alert sound set successfully!" }
+      "sound_reset_success" -> when (lang) { LANG_BN -> "সিস্টেম ডিফল্ট সাউন্ডে ফিরে যাওয়া হয়েছে"; LANG_AR -> "تمت استعادة الصوت الافتراضي"; else -> "Reverted to system default sound" }
+      "invalid_audio_file" -> when (lang) { LANG_BN -> "অনুগ্রহ করে একটি সঠিক অডিও/MP3 ফাইল নির্বাচন করুন"; LANG_AR -> "يرجى اختيار ملف صوتي صالح"; else -> "Please select a valid audio/MP3 file" }
       "test_notification" -> when (lang) { LANG_BN -> "টেস্ট নোটিফিকেশন"; LANG_AR -> "إشعار تجريبي"; else -> "Test Prayer Notification" }
       "test_notification_sent" -> when (lang) { LANG_BN -> "নোটিফিকেশন পাঠানো হয়েছে"; LANG_AR -> "تم إرسال الإشعار"; else -> "Notification triggered!" }
       "detect_gps" -> when (lang) { LANG_BN -> "জিপিএস অবস্থান সনাক্ত করুন"; LANG_AR -> "تحديد الموقع عبر GPS"; else -> "Detect GPS Location" }
+      "detecting_location" -> when (lang) { LANG_BN -> "অবস্থান সনাক্ত করা হচ্ছে..."; LANG_AR -> "جاري تحديد الموقع..."; else -> "Detecting location..." }
       "about_app" -> when (lang) { LANG_BN -> "অ্যাপ সম্পর্কিত"; LANG_AR -> "حول التطبيق"; else -> "About App" }
       "close" -> when (lang) { LANG_BN -> "বন্ধ করুন"; LANG_AR -> "إغلاق"; else -> "Close" }
       "english" -> when (lang) { LANG_BN -> "ইংরেজি (English)"; LANG_AR -> "الإنجليزية (English)"; else -> "English" }
@@ -397,8 +547,8 @@ object AppLanguageHelper {
       "sun_schedule_badge" -> when (lang) { LANG_BN -> "সৌর সময়সূচি"; LANG_AR -> "مواقيت الشمس"; else -> "Sun Schedule" }
       "sunrise" -> when (lang) { LANG_BN -> "সূর্যোদয়"; LANG_AR -> "الشروق"; else -> "Sunrise" }
       "sunset" -> when (lang) { LANG_BN -> "সূর্যাস্ত"; LANG_AR -> "الغروب"; else -> "Sunset" }
-      "voluntary_prayers_title" -> when (lang) { LANG_BN -> "সুন্নত ও নফল সালাত (নফল)"; LANG_AR -> "السنن والنوافل"; else -> "Voluntary & Sunnah (Nawafil)" }
-      "voluntary_prayers_subtitle" -> when (lang) { LANG_BN -> "ইশরাক, চাশত (দুহা) ও তাহাজ্জুদ"; LANG_AR -> "الإشراق والضحى وقيام الليل"; else -> "Ishraq, Duha & Tahajjud night vigil" }
+      "voluntary_prayers_title" -> when (lang) { LANG_BN -> "নফল সালাত"; LANG_AR -> "صلاة التطوع والنوافل"; else -> "Voluntary Prayers (Nawafil)" }
+      "voluntary_prayers_subtitle" -> when (lang) { LANG_BN -> "ইশরাক, চাশত (দুহা) ও তাহাজ্জুদ"; LANG_AR -> "الإشراق والضحى والتهجد"; else -> "Ishraq, Duha & Tahajjud" }
       "sunnah_badge" -> when (lang) { LANG_BN -> "সুন্নত"; LANG_AR -> "سنة"; else -> "Sunnah" }
       "forbidden_prayers_title" -> when (lang) { LANG_BN -> "সালাত আদায় নিষিদ্ধ সময়"; LANG_AR -> "أوقات كراهة الصلاة"; else -> "Forbidden Prayer Times" }
       "forbidden_prayers_subtitle" -> when (lang) {
@@ -429,6 +579,10 @@ object AppLanguageHelper {
       "world_cities" -> when (lang) { LANG_BN -> "বিশ্বের শহরসমূহ"; LANG_AR -> "مدن العالم"; else -> "World Cities" }
       "filtered" -> when (lang) { LANG_BN -> "ফিল্টারকৃত"; LANG_AR -> "مصفاة"; else -> "Filtered" }
       "no_cities_found" -> when (lang) { LANG_BN -> "কোনো শহর পাওয়া যায়নি"; LANG_AR -> "لم يتم العثور على مدن"; else -> "No cities found" }
+
+      // Important Special Prayers
+      "important_prayers" -> when (lang) { LANG_BN -> "কিছু গুরুত্বপূর্ণ সালাত"; LANG_AR -> "صلوات مهمة ومأثورة"; else -> "Important Special Prayers" }
+      "important_prayers_sub" -> when (lang) { LANG_BN -> "ইস্তিখারা, সালাতুল হাজাত ও সালাতুত তাসবীহ"; LANG_AR -> "الاستخارة، صلاة الحاجة، صلاة التسابيح"; else -> "Istikhara, Salatul Hajat & Salatut Tasbih" }
 
       // Hijri Calendar
       "hijri_calendar" -> when (lang) { LANG_BN -> "হিজরি ক্যালেন্ডার"; LANG_AR -> "التقويم الهجري"; else -> "Hijri Calendar" }
@@ -516,6 +670,77 @@ object AppLanguageHelper {
         LANG_BN -> "নামাজের সময়সূচি লোকাল ডিভাইসে সংরক্ষিত থাকে, ইন্টারনেটের ব্যাটারি অপচয় হয় না।"
         LANG_AR -> "المواقيت مخزنة محلياً لتوفير الاتصال المستمر بالإنترنت."
         else -> "Prayer schedules cached locally in Room for battery-efficient zero-network wakeups."
+      }
+      "battery_bullet_4_title" -> when (lang) { LANG_BN -> "ইন্টারনেট পেলেই তাৎক্ষণিক আপডেট"; LANG_AR -> "تحديث فوري عند توفر الإنترنت"; else -> "Instant Update on Internet" }
+      "battery_bullet_4_desc" -> when (lang) {
+        LANG_BN -> "যারা সবসময় অনলাইনে থাকেন না, তাদের সুবিধার্থে ইন্টারনেট সংযোগ পাওয়ার সাথে সাথেই অ্যাপটি স্বয়ংক্রিয়ভাবে ক্লাউড থেকে সর্বশেষ সঠিক সময়সূচী আপডেট করে নেয়।"
+        LANG_AR -> "للذين لا يتصلون بالإنترنت دائماً، يتم تحديث مواقيت الصلاة فور اتصال الجهاز بالإنترنت مباشرة وتلقائياً."
+        else -> "For users who are not online all the time, timings are refreshed immediately and automatically as soon as internet connectivity is detected."
+      }
+
+      // Network & Offline / Online Status
+      "internet_restored_updated" -> when (lang) {
+        LANG_BN -> "ইন্টারনেট সংযোগ পাওয়া গেছে: নামাজের সময়সূচী তাৎক্ষণিকভাবে ক্লাউড থেকে আপডেট করা হয়েছে!"
+        LANG_AR -> "تم الاتصال بالإنترنت: تم تحديث مواقيت الصلاة فوراً من السحابة!"
+        else -> "Internet connected: Prayer timings updated immediately from cloud!"
+      }
+      "offline_badge" -> when (lang) { LANG_BN -> "অফলাইন"; LANG_AR -> "بدون إنترنت"; else -> "Offline" }
+      "offline_mode_badge" -> when (lang) { LANG_BN -> "অফলাইন মোড"; LANG_AR -> "وضع بدون إنترنت"; else -> "Offline Mode" }
+      "offline_mode_hint" -> when (lang) { LANG_BN -> "ইন্টারনেট পেলে স্বয়ংক্রিয়ভাবে আপডেট হবে"; LANG_AR -> "يتم التحديث تلقائياً فور توفر الإنترنت"; else -> "Auto-updates immediately upon internet connection" }
+      "online_mode_badge" -> when (lang) { LANG_BN -> "অনলাইন মোড (ক্লাউড সিঙ্ক)"; LANG_AR -> "متصل بالإنترنت (محدث)"; else -> "Online Mode (Cloud Synced)" }
+      "cloud_sync_active" -> when (lang) { LANG_BN -> "ক্লাউড সিঙ্ক সক্রিয়"; LANG_AR -> "محدث عبر السحابة"; else -> "Cloud Synced" }
+
+      // Ramadan Iftar & Suhoor Section
+      "ramadan_iftar_suhoor_title" -> when (lang) { LANG_BN -> "পবিত্র মাহে রমজান"; LANG_AR -> "شهر رمضان المبارك"; else -> "Holy Ramadan" }
+      "ramadan_today_schedule" -> when (lang) { LANG_BN -> "ইফতার ও সাহরি সময়সূচী"; LANG_AR -> "مواقيت الإفطار والسحور"; else -> "Iftar & Suhoor Schedule" }
+      "day_before_ramadan_notice" -> when (lang) {
+        LANG_BN -> "আগামীকাল থেকে পবিত্র মাহে রমজান শুরু (ইনশাআল্লাহ)"
+        LANG_AR -> "غداً أول أيام شهر رمضان المبارك إن شاء الله"
+        else -> "Holy Ramadan begins tomorrow (Insha'Allah)"
+      }
+      "ramadan_day_prefix" -> when (lang) { LANG_BN -> "রমজান"; LANG_AR -> "رمضان"; else -> "Ramadan" }
+      "suhoor_end_label" -> when (lang) { LANG_BN -> "সাহরির শেষ সময়"; LANG_AR -> "نهاية وقت السحور"; else -> "Suhoor Ends" }
+      "suhoor_desc" -> when (lang) { LANG_BN -> "ফজরের ওয়াক্ত শুরু (ইমসাক)"; LANG_AR -> "أذان الفجر (الإمساك)"; else -> "Fajr dawn begins (Imsak)" }
+      "iftar_label" -> when (lang) { LANG_BN -> "ইফতারের সময়"; LANG_AR -> "موعد الإفطار"; else -> "Iftar Time" }
+      "iftar_desc" -> when (lang) { LANG_BN -> "মাগরিবের সূর্যাস্তের সময়"; LANG_AR -> "غروب الشمس وأذان المغرب"; else -> "At Maghrib sunset" }
+      "suhoor_countdown_label" -> when (lang) { LANG_BN -> "সাহরি শেষ হতে বাকি"; LANG_AR -> "المتبقي لانتهاء السحور"; else -> "Suhoor ends in" }
+      "iftar_countdown_label" -> when (lang) { LANG_BN -> "ইফতার হতে বাকি"; LANG_AR -> "المتبقي لموعد الإفطار"; else -> "Iftar in" }
+      "suhoor_time_active" -> when (lang) { LANG_BN -> "সাহরির সময় চলছে"; LANG_AR -> "وقت السحور جارٍ الآن"; else -> "Suhoor Time Active" }
+      "fasting_active" -> when (lang) { LANG_BN -> "রোযার সময় চলছে"; LANG_AR -> "الصيام جارٍ الآن"; else -> "Fasting in Progress" }
+      "iftar_time_active" -> when (lang) { LANG_BN -> "ইফতারের সময় হয়েছে!"; LANG_AR -> "حان موعد الإفطار!"; else -> "Time for Iftar!" }
+      "suhoor_ended_badge" -> when (lang) { LANG_BN -> "সাহরি সমাপ্ত"; LANG_AR -> "انتهى السحور"; else -> "Suhoor Ended" }
+      "iftar_completed_badge" -> when (lang) { LANG_BN -> "ইফতার সম্পন্ন"; LANG_AR -> "تم الإفطار"; else -> "Iftar Done" }
+      "iftar_dua_title" -> when (lang) { LANG_BN -> "ইফতারের দোয়া"; LANG_AR -> "دعاء الإفطار المأثور"; else -> "Iftar Dua" }
+      "iftar_dua_arabic" -> "ذَهَبَ الظَّمَأُ وَابْتَلَّتِ الْعُرُوقُ وَثَبَتَ الأَجْرُ إِنْ شَاءَ اللَّهُ"
+      "iftar_dua_meaning" -> when (lang) {
+        LANG_BN -> "পিপাসা দূরীভূত হলো, শিরা-উপশিরা সিক্ত হলো এবং ইনশাআল্লাহ সওয়াব নির্ধারিত হলো। (আবু দাউদ ২৩৫৭)"
+        LANG_AR -> "ذهب العطش، وابتلت العروق بالماء، وثبت الثواب عند الله تعالى (أبو داود)."
+        else -> "The thirst is gone, the veins are moistened, and the reward is confirmed, if Allah wills. (Abu Dawud)"
+      }
+      "ramadan_notif_hint" -> when (lang) {
+        LANG_BN -> "২টি পূর্ব সতর্কবার্তা: সাহরির শেষ সময় আসন্ন (~১৫ মি.) এবং ইফতার আসন্ন (~১৪ মি.)"
+        LANG_AR -> "تنبيهان مسبقان: قرب انتهاء السحور (~١٥ د) وقرب الإفطار (~١٤ د)"
+        else -> "2 advance alerts: Suhoor ending soon (~15m) & Iftar approaching soon (~14m)"
+      }
+      "preview_ramadan_toggle" -> when (lang) {
+        LANG_BN -> "রমজান মোড প্রিভিউ টেস্ট"
+        LANG_AR -> "معاينة وضع رمضان"
+        else -> "Preview Ramadan Mode"
+      }
+      "test_suhoor_notification" -> when (lang) {
+        LANG_BN -> "সাহরি টেস্ট অ্যালার্ট"
+        LANG_AR -> "تجربة إشعار السحور"
+        else -> "Test Suhoor Alert"
+      }
+      "test_iftar_notification" -> when (lang) {
+        LANG_BN -> "ইফতার টেস্ট অ্যালার্ট"
+        LANG_AR -> "تجربة إشعار الإفطار"
+        else -> "Test Iftar Alert"
+      }
+      "eid_mubarak_greeting" -> when (lang) {
+        LANG_BN -> "🌙 ঈদ মোবারক! তাক্বাব্বালাল্লাহু মিন্না ওয়া মিনকুম।"
+        LANG_AR -> "🌙 عيد فطر مبارك! تقبل الله منا ومنكم صالح الأعمال."
+        else -> "🌙 Eid Mubarak! Taqabbal Allahu minna wa minkum."
       }
 
       else -> key

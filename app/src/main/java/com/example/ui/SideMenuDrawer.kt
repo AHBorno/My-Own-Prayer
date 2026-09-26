@@ -28,6 +28,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.Brightness4
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.CalendarMonth
@@ -37,6 +38,7 @@ import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Mosque
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Palette
@@ -65,12 +67,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
+import com.example.util.AlertSoundManager
 import com.example.util.AppLanguageHelper
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -85,6 +89,9 @@ fun SideMenuDrawerContent(
   onOpenCityDialog: () -> Unit,
   onOpenQibla: () -> Unit,
   onOpenHijriCalendar: () -> Unit,
+  onOpenImportantPrayers: () -> Unit = {},
+  onOpenAlertSound: () -> Unit = {},
+  onOpenTasbeeh: () -> Unit = {},
   onCheckUpdates: () -> Unit,
   onReportBug: () -> Unit = {},
   onTestNotification: () -> Unit,
@@ -366,9 +373,13 @@ fun SideMenuDrawerContent(
                 color = MaterialTheme.colorScheme.onPrimaryContainer
               )
               Text(
-                text = AppLanguageHelper.getString("pull_to_refresh_hint", lang),
+                text = if (uiState.isOnline) {
+                  "${AppLanguageHelper.getString("cloud_sync_active", lang)} • ${uiState.lastSyncedFormatted}"
+                } else {
+                  "${AppLanguageHelper.getString("offline_mode_badge", lang)} • ${AppLanguageHelper.getString("offline_mode_hint", lang)}"
+                },
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
               )
             }
           }
@@ -376,6 +387,16 @@ fun SideMenuDrawerContent(
       }
 
       // 5. Quick Tools & Navigation
+      item {
+        DrawerActionItem(
+          icon = Icons.Default.MenuBook,
+          title = AppLanguageHelper.getString("important_prayers", lang),
+          subtitle = AppLanguageHelper.getString("important_prayers_sub", lang),
+          onClick = onOpenImportantPrayers,
+          testTag = "drawer_important_prayers_button"
+        )
+      }
+
       item {
         DrawerActionItem(
           icon = Icons.Default.CalendarMonth,
@@ -403,6 +424,38 @@ fun SideMenuDrawerContent(
           subtitle = "${uiState.currentCity.name}, ${uiState.currentCity.country}",
           onClick = onOpenCityDialog,
           testTag = "drawer_city_button"
+        )
+      }
+
+      item {
+        val soundContext = LocalContext.current
+        val isCustomSound = AlertSoundManager.isCustomSoundEnabled(soundContext)
+        val customSoundName = AlertSoundManager.getCustomSoundName(soundContext)
+
+        DrawerActionItem(
+          icon = Icons.Default.Audiotrack,
+          title = AppLanguageHelper.getString("custom_alert_sound", lang),
+          subtitle = if (isCustomSound) {
+            "${customSoundName ?: "custom_alert.mp3"} • MP3"
+          } else {
+            AppLanguageHelper.getString("system_default_sound", lang)
+          },
+          onClick = onOpenAlertSound,
+          testTag = "drawer_alert_sound_button"
+        )
+      }
+
+      item {
+        val tasbeehContext = LocalContext.current
+        val currentCount = com.example.util.TasbeehPreferences.getCount(tasbeehContext)
+        val currentDhikr = com.example.util.TasbeehPreferences.getCurrentDhikr(tasbeehContext)
+
+        DrawerActionItem(
+          iconPainter = painterResource(id = R.drawable.ic_tasbeeh),
+          title = AppLanguageHelper.getString("tasbeeh_counter", lang),
+          subtitle = "${currentDhikr.arabic} • $currentCount",
+          onClick = onOpenTasbeeh,
+          testTag = "drawer_tasbeeh_button"
         )
       }
 
@@ -449,6 +502,12 @@ fun SideMenuDrawerContent(
             text = "My Own Prayer • v${com.example.BuildConfig.VERSION_NAME}",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+          )
+          Text(
+            text = "The Quran Site",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.primary
           )
           Text(
             text = "Battery-Optimized Offline Schedule",
@@ -560,7 +619,8 @@ private fun ThemeChip(
 
 @Composable
 private fun DrawerActionItem(
-  icon: ImageVector,
+  icon: ImageVector? = null,
+  iconPainter: androidx.compose.ui.graphics.painter.Painter? = null,
   title: String,
   subtitle: String,
   onClick: () -> Unit,
@@ -582,12 +642,21 @@ private fun DrawerActionItem(
         .background(MaterialTheme.colorScheme.surfaceVariant),
       contentAlignment = Alignment.Center
     ) {
-      Icon(
-        imageVector = icon,
-        contentDescription = title,
-        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.size(18.dp)
-      )
+      if (iconPainter != null) {
+        Icon(
+          painter = iconPainter,
+          contentDescription = title,
+          tint = MaterialTheme.colorScheme.onSurfaceVariant,
+          modifier = Modifier.size(18.dp)
+        )
+      } else if (icon != null) {
+        Icon(
+          imageVector = icon,
+          contentDescription = title,
+          tint = MaterialTheme.colorScheme.onSurfaceVariant,
+          modifier = Modifier.size(18.dp)
+        )
+      }
     }
     Spacer(modifier = Modifier.width(14.dp))
     Column(modifier = Modifier.weight(1f)) {

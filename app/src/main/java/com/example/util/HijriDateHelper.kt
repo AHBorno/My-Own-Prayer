@@ -540,4 +540,55 @@ object HijriDateHelper {
       set(year, month - 1, day, 12, 0, 0)
     }.time
   }
+
+  /**
+   * Returns true if the date is a day before Ramadan (Sha'ban 29/30 when tomorrow is Ramadan 1st).
+   */
+  fun isDayBeforeRamadan(date: Date = Date(), adjustmentDays: Int = 0): Boolean {
+    val todayHijri = getHijriDate(date, adjustmentDays)
+    val tomorrowCal = Calendar.getInstance().apply {
+      time = date
+      add(Calendar.DAY_OF_YEAR, 1)
+    }
+    val tomorrowHijri = getHijriDate(tomorrowCal.time, adjustmentDays)
+    return (todayHijri.month == 8 && todayHijri.day >= 29) ||
+      (tomorrowHijri.month == 9 && tomorrowHijri.day == 1)
+  }
+
+  /**
+   * Returns true if the date is the last day of Ramadan (tomorrow is 1st of Shawwal or day >= 30).
+   */
+  fun isLastDayOfRamadan(date: Date = Date(), adjustmentDays: Int = 0): Boolean {
+    val todayHijri = getHijriDate(date, adjustmentDays)
+    if (todayHijri.month != 9) return false
+    val tomorrowCal = Calendar.getInstance().apply {
+      time = date
+      add(Calendar.DAY_OF_YEAR, 1)
+    }
+    val tomorrowHijri = getHijriDate(tomorrowCal.time, adjustmentDays)
+    return tomorrowHijri.month == 10 || todayHijri.day >= 30
+  }
+
+  /**
+   * Checks whether the Ramadan Iftar & Suhoor timing section should be visible according to Hijri calendar:
+   * - Appears a day before Ramadan (Sha'ban 29/30)
+   * - Remains active during Ramadan
+   * - Disappears on the last day of Ramadan
+   */
+  fun isRamadanSeasonActive(date: Date = Date(), adjustmentDays: Int = 0): Boolean {
+    val todayHijri = getHijriDate(date, adjustmentDays)
+    val tomorrowCal = Calendar.getInstance().apply {
+      time = date
+      add(Calendar.DAY_OF_YEAR, 1)
+    }
+    val tomorrowHijri = getHijriDate(tomorrowCal.time, adjustmentDays)
+
+    val isDayBefore = (todayHijri.month == 8 && todayHijri.day >= 29) ||
+      (tomorrowHijri.month == 9 && tomorrowHijri.day == 1)
+
+    val isRamadan = todayHijri.month == 9
+    val isLastDay = isRamadan && (tomorrowHijri.month == 10 || todayHijri.day >= 30)
+
+    return isDayBefore || (isRamadan && !isLastDay)
+  }
 }

@@ -1,6 +1,7 @@
 package com.example.ui
 
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.alarm.PrayerAlarmScheduler
@@ -14,6 +15,7 @@ import com.example.repository.PrayerRepository
 import com.example.update.AppUpdateInfo
 import com.example.update.AppUpdateManager
 import com.example.util.LocationHelper
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -42,9 +44,15 @@ data class PrayerUiState(
   val isDetectingLocation: Boolean = false,
   val testMessage: String? = null,
   val isBatteryOptimizedMode: Boolean = true,
+  val isOnline: Boolean = true,
+  val justUpdatedFromInternet: Boolean = false,
+  val isRamadanSeason: Boolean = false,
+  val previewRamadanMode: Boolean = false,
+  val ramadanTiming: com.example.data.model.RamadanTiming? = null,
   val appUpdateInfo: AppUpdateInfo? = null,
   val isCheckingUpdate: Boolean = false,
   val showUpdateDialog: Boolean = false,
+  val showTasbeehDialog: Boolean = false,
   val appLanguage: String = "en",
   val appTheme: String = "system"
 )
@@ -55,15 +63,26 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
   private val _uiState = MutableStateFlow(
     PrayerUiState(
       appLanguage = repository.getAppLanguage(),
-      appTheme = repository.getAppTheme()
+      appTheme = repository.getAppTheme(),
+      isOnline = com.example.util.NetworkConnectivityMonitor.isOnlineNow(application),
+      previewRamadanMode = repository.isPreviewRamadanMode()
     )
   )
   val uiState: StateFlow<PrayerUiState> = _uiState.asStateFlow()
+
+  fun openTasbeeh() {
+    _uiState.update { it.copy(showTasbeehDialog = true) }
+  }
+
+  fun closeTasbeeh() {
+    _uiState.update { it.copy(showTasbeehDialog = false) }
+  }
 
   private val _countdownText = MutableStateFlow("--:--:--")
   val countdownText: StateFlow<String> = _countdownText.asStateFlow()
 
   private var currentEntity: PrayerEntity? = null
+  private var syncJob: Job? = null
 
   init {
     val savedCity = repository.getSelectedCity()
@@ -71,19 +90,35 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
       it.copy(
         currentCity = savedCity,
         appLanguage = repository.getAppLanguage(),
-        appTheme = repository.getAppTheme()
+        appTheme = repository.getAppTheme(),
+        previewRamadanMode = repository.isPreviewRamadanMode()
       )
     }
 
     // Observe Room database for today's prayer times
     viewModelScope.launch {
       repository.getTodayPrayerTimes().collect { entity ->
-        if (entity != null) {
+        if (entity != null && isValidPrayerEntity(entity)) {
           currentEntity = entity
           updatePrayerList(entity)
         } else {
           syncToday(savedCity)
         }
+      }
+    }
+
+    // Observe real-time network connectivity changes
+    viewModelScope.launch {
+      com.example.util.NetworkConnectivityMonitor.isOnline.collect { online ->
+        _uiState.update { it.copy(isOnline = online) }
+      }
+    }
+
+    // Immediately update prayer timings when the device connects to the internet!
+    viewModelScope.launch {
+      com.example.util.NetworkConnectivityMonitor.internetRestoredEvents.collect {
+        val city = _uiState.value.currentCity
+        syncToday(city = city, fromInternetRestored = true)
       }
     }
 
@@ -171,13 +206,32 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
     _uiState.update { it.copy(testMessage = msg) }
   }
 
-  fun syncToday(city: CityLocation = _uiState.value.currentCity) {
-    viewModelScope.launch {
+  fun syncToday(
+    city: CityLocation = _uiState.value.currentCity,
+    fromInternetRestored: Boolean = false
+  ) {
+    if (syncJob?.isActive == true && !fromInternetRestored && city == _uiState.value.currentCity) {
+      return
+    }
+    syncJob = viewModelScope.launch {
       _uiState.update { it.copy(isSyncing = true, currentCity = city) }
       try {
         val result = repository.syncPrayerTimes(city)
         currentEntity = result
         updatePrayerList(result)
+        if (fromInternetRestored || result.syncSource.contains("Online", ignoreCase = true)) {
+          val bannerMsg = com.example.util.AppLanguageHelper.getString("internet_restored_updated", _uiState.value.appLanguage)
+          _uiState.update {
+            it.copy(
+              testMessage = bannerMsg,
+              justUpdatedFromInternet = true
+            )
+          }
+          viewModelScope.launch {
+            delay(4500)
+            _uiState.update { it.copy(justUpdatedFromInternet = false) }
+          }
+        }
       } catch (_: Exception) {
         // Fallback handled internally
       } finally {
@@ -599,9 +653,31 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
 
     _countdownText.value = countdownStr
 
-    if (!listsUnchanged) {
-      // FULL UPDATE: Prayer transition, status change, or notification toggle occurred
-      _uiState.update {
+    val previousRamadanSeason = _uiState.value.isRamadanSeason
+    val isRamadan = com.example.util.RamadanHelper.isRamadanActive(
+      context = getApplication(),
+      prayerEntity = entity,
+      now = now,
+      forcePreview = _uiState.value.previewRamadanMode
+    )
+
+    if (previousRamadanSeason && !isRamadan) {
+      checkAndPushEidMubarakOnDisappearance(entity, now)
+    }
+
+    val ramadanTiming = if (isRamadan) {
+      com.example.util.RamadanHelper.computeRamadanTiming(
+        context = getApplication(),
+        prayerEntity = entity,
+        now = now,
+        forcePreview = _uiState.value.previewRamadanMode,
+        suhoorEnabled = repository.isSuhoorNotificationEnabled(),
+        iftarEnabled = repository.isIftarNotificationEnabled()
+      )
+    } else null
+
+    _uiState.update {
+      if (!listsUnchanged) {
         it.copy(
           prayers = updatedObligatory,
           voluntaryPrayers = updatedVoluntary,
@@ -613,9 +689,79 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
           isCloseToNextPrayer = isCloseToNext,
           countdownText = countdownStr,
           syncSource = entity.syncSource,
-          lastSyncedFormatted = cached.lastSyncFormatted
+          lastSyncedFormatted = cached.lastSyncFormatted,
+          isRamadanSeason = isRamadan,
+          ramadanTiming = ramadanTiming
+        )
+      } else {
+        it.copy(
+          countdownText = countdownStr,
+          isRamadanSeason = isRamadan,
+          ramadanTiming = ramadanTiming
         )
       }
+    }
+  }
+
+  fun toggleSuhoorNotification(enabled: Boolean) {
+    repository.setSuhoorNotificationEnabled(enabled)
+    _uiState.update { it.copy(ramadanTiming = it.ramadanTiming?.copy(suhoorNotificationEnabled = enabled)) }
+    currentEntity?.let { entity ->
+      PrayerAlarmScheduler.scheduleAlarmsForToday(
+        context = getApplication(),
+        prayerEntity = entity,
+        enabledPrayers = repository.getEnabledPrayers(),
+        enabledForbidden = repository.getEnabledForbiddenTimes()
+      )
+    }
+  }
+
+  fun toggleIftarNotification(enabled: Boolean) {
+    repository.setIftarNotificationEnabled(enabled)
+    _uiState.update { it.copy(ramadanTiming = it.ramadanTiming?.copy(iftarNotificationEnabled = enabled)) }
+    currentEntity?.let { entity ->
+      PrayerAlarmScheduler.scheduleAlarmsForToday(
+        context = getApplication(),
+        prayerEntity = entity,
+        enabledPrayers = repository.getEnabledPrayers(),
+        enabledForbidden = repository.getEnabledForbiddenTimes()
+      )
+    }
+  }
+
+  fun togglePreviewRamadanMode() {
+    val newMode = !_uiState.value.previewRamadanMode
+    repository.setPreviewRamadanMode(newMode)
+    _uiState.update { it.copy(previewRamadanMode = newMode) }
+    currentEntity?.let { updatePrayerList(it) }
+  }
+
+  fun triggerTestSuhoorNotification() {
+    val time = currentEntity?.fajr ?: "04:30"
+    com.example.alarm.PrayerNotificationHelper.showRamadanNotification(
+      context = getApplication(),
+      eventType = "SUHOOR_SOON",
+      timeFormatted = com.example.util.RamadanHelper.format12h(time)
+    )
+    _uiState.update { it.copy(testMessage = "Suhoor end soon alert pushed to notification shade!") }
+  }
+
+  fun triggerTestIftarNotification() {
+    val time = currentEntity?.maghrib ?: "18:15"
+    com.example.alarm.PrayerNotificationHelper.showRamadanNotification(
+      context = getApplication(),
+      eventType = "IFTAR_SOON",
+      timeFormatted = com.example.util.RamadanHelper.format12h(time)
+    )
+    _uiState.update { it.copy(testMessage = "Iftar soon alert pushed to notification shade!") }
+  }
+
+  fun scheduleTestRamadanAlarm(delaySeconds: Int = 10, eventType: String = "SUHOOR_SOON") {
+    PrayerAlarmScheduler.scheduleTestRamadanAlarm(getApplication(), delaySeconds, eventType)
+    _uiState.update {
+      it.copy(
+        testMessage = "Exact $eventType alarm set! Lock screen or close app to test ($delaySeconds sec)"
+      )
     }
   }
 
@@ -659,5 +805,41 @@ class PrayerViewModel(application: Application) : AndroidViewModel(application) 
   private fun formatTimestamp(millis: Long): String {
     val sdf = SimpleDateFormat("h:mm a", Locale.getDefault())
     return "Today at " + sdf.format(Date(millis))
+  }
+
+  private fun isValidPrayerEntity(entity: PrayerEntity): Boolean {
+    return try {
+      val fHour = entity.fajr.trim().split(" ")[0].split(":")[0].toInt()
+      val mHour = entity.maghrib.trim().split(" ")[0].split(":")[0].toInt()
+      // Fajr must be early morning (2am-8am) and Maghrib in afternoon/evening (3pm-10pm)
+      fHour in 2..9 && mHour in 15..22
+    } catch (_: Exception) {
+      false
+    }
+  }
+
+  private fun checkAndPushEidMubarakOnDisappearance(entity: PrayerEntity, now: Long) {
+    val context = getApplication<Application>()
+    val adjustment = com.example.util.HijriDateHelper.getAdjustment(context)
+    val todayDate = Date(now)
+    val todayHijri = com.example.util.HijriDateHelper.getHijriDate(todayDate, adjustment)
+
+    val prefs = context.getSharedPreferences("ramadan_prefs", Context.MODE_PRIVATE)
+    val lastNotifiedYear = prefs.getInt("key_eid_mubarak_notified_year", 0)
+
+    val isLastDay = com.example.util.HijriDateHelper.isLastDayOfRamadan(todayDate, adjustment)
+    val isFirstShawwal = todayHijri.month == 10 && todayHijri.day == 1
+
+    if ((isLastDay || isFirstShawwal) && lastNotifiedYear != todayHijri.year) {
+      val iftarMillis = com.example.util.RamadanHelper.parsePrayerTimeToMillis(entity.date, entity.maghrib)
+      if (now >= iftarMillis) {
+        com.example.alarm.PrayerNotificationHelper.showEidMubarakNotification(context)
+        prefs.edit().putInt("key_eid_mubarak_notified_year", todayHijri.year).apply()
+      }
+    }
+  }
+
+  fun triggerTestEidMubarakNotification() {
+    com.example.alarm.PrayerNotificationHelper.showEidMubarakNotification(getApplication())
   }
 }

@@ -54,6 +54,10 @@
             <intent-filter>
                 <action android:name="com.example.ACTION_PRAYER_ALARM" />
                 <action android:name="com.example.ACTION_TEST_ALARM" />
+                <action android:name="com.example.ACTION_RAMADAN_ALARM" />
+                <action android:name="com.example.ACTION_DAILY_ROLLOVER_ALARM" />
+                <action android:name="com.example.ACTION_DISMISS_NOTIFICATION" />
+                <action android:name="com.example.ACTION_STOP_AUDIO" />
             </intent-filter>
         </receiver>
 
@@ -68,6 +72,23 @@
                 <action android:name="android.intent.action.TIMEZONE_CHANGED" />
             </intent-filter>
         </receiver>
+        <!-- Tasbeeh Counter Home Screen Widget Provider -->
+        <receiver
+            android:name=".widget.TasbeehWidgetProvider"
+            android:exported="true"
+            android:label="@string/tasbeeh_counter">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.example.widget.TASBEEH_INCREMENT" />
+                <action android:name="com.example.widget.TASBEEH_RESET" />
+                <action android:name="com.example.widget.TASBEEH_NEXT_DHIKR" />
+                <action android:name="com.example.widget.TASBEEH_UPDATE_ALL" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_tasbeeh_info" />
+        </receiver>
+
         <!-- FileProvider for installing downloaded APK updates securely -->
         <provider
             android:name="androidx.core.content.FileProvider"

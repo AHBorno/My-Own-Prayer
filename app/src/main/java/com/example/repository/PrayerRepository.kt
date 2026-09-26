@@ -22,6 +22,33 @@ class PrayerRepository(private val context: Context) {
   private val KEY_HAS_REQUESTED_INITIAL_PERMISSIONS = "key_has_requested_initial_permissions"
   private val KEY_APP_LANGUAGE = "key_app_language"
   private val KEY_APP_THEME = "key_app_theme"
+  private val KEY_SUHOOR_NOTIF_ENABLED = "key_suhoor_notif_enabled"
+  private val KEY_IFTAR_NOTIF_ENABLED = "key_iftar_notif_enabled"
+  private val KEY_PREVIEW_RAMADAN_MODE = "key_preview_ramadan_mode"
+
+  fun isSuhoorNotificationEnabled(): Boolean {
+    return prefs.getBoolean(KEY_SUHOOR_NOTIF_ENABLED, true)
+  }
+
+  fun setSuhoorNotificationEnabled(enabled: Boolean) {
+    prefs.edit().putBoolean(KEY_SUHOOR_NOTIF_ENABLED, enabled).apply()
+  }
+
+  fun isIftarNotificationEnabled(): Boolean {
+    return prefs.getBoolean(KEY_IFTAR_NOTIF_ENABLED, true)
+  }
+
+  fun setIftarNotificationEnabled(enabled: Boolean) {
+    prefs.edit().putBoolean(KEY_IFTAR_NOTIF_ENABLED, enabled).apply()
+  }
+
+  fun isPreviewRamadanMode(): Boolean {
+    return prefs.getBoolean(KEY_PREVIEW_RAMADAN_MODE, false)
+  }
+
+  fun setPreviewRamadanMode(preview: Boolean) {
+    prefs.edit().putBoolean(KEY_PREVIEW_RAMADAN_MODE, preview).apply()
+  }
 
   fun getAppLanguage(): String {
     return prefs.getString(KEY_APP_LANGUAGE, "en") ?: "en"
@@ -47,13 +74,22 @@ class PrayerRepository(private val context: Context) {
     prefs.edit().putBoolean(KEY_HAS_REQUESTED_INITIAL_PERMISSIONS, requested).apply()
   }
 
-  fun getTodayPrayerTimes(): Flow<PrayerEntity?> {
-    val todayDateStr = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+  fun getTodayPrayerTimes(cityLocation: CityLocation? = null): Flow<PrayerEntity?> {
+    val city = cityLocation ?: getSelectedCity()
+    val cityTz = java.util.TimeZone.getTimeZone(city.timeZoneId)
+    val todayDateStr = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+      timeZone = cityTz
+    }.format(Date())
     return prayerDao.getPrayerTimesForDate(todayDateStr)
   }
 
   fun getLatestPrayerTimes(): Flow<PrayerEntity?> {
-    return prayerDao.getLatestPrayerTimes()
+    val city = getSelectedCity()
+    val cityTz = java.util.TimeZone.getTimeZone(city.timeZoneId)
+    val todayDateStr = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+      timeZone = cityTz
+    }.format(Date())
+    return prayerDao.getLatestPrayerTimesOnOrBefore(todayDateStr)
   }
 
   suspend fun syncPrayerTimes(city: CityLocation): PrayerEntity {
@@ -110,5 +146,9 @@ class PrayerRepository(private val context: Context) {
 
   fun scheduleTestAlarm(delaySeconds: Int = 10) {
     PrayerAlarmScheduler.scheduleTestAlarm(context, delaySeconds)
+  }
+
+  fun triggerEidMubarakNotification() {
+    PrayerNotificationHelper.showEidMubarakNotification(context)
   }
 }

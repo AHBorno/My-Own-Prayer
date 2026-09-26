@@ -60,6 +60,26 @@ interface PrayerApiService {
   companion object {
     private const val BASE_URL = "https://api.aladhan.com/"
 
+    fun getAladhanMethodForCountry(country: String): Int {
+      val c = country.trim().lowercase(java.util.Locale.US)
+      return when {
+        c.contains("bangladesh") || c.contains("pakistan") || c.contains("india") ||
+          c.contains("afghanistan") || c.contains("sri lanka") || c.contains("nepal") -> 1 // Karachi
+        c.contains("saudi") -> 4 // Umm Al-Qura
+        c.contains("egypt") || c.contains("morocco") || c.contains("algeria") ||
+          c.contains("tunisia") || c.contains("libya") || c.contains("sudan") ||
+          c.contains("yemen") || c.contains("syria") || c.contains("lebanon") ||
+          c.contains("jordan") || c.contains("palestine") || c.contains("iraq") -> 5 // Egyptian General Authority
+        c.contains("emirates") || c.contains("dubai") || c.contains("uae") ||
+          c.contains("qatar") || c.contains("kuwait") || c.contains("oman") -> 8 // Gulf
+        c.contains("turkey") -> 13 // Diyanet
+        c.contains("singapore") || c.contains("malaysia") || c.contains("indonesia") ||
+          c.contains("brunei") -> 11 // Singapore / Majlis Ugama Islam
+        c.contains("united states") || c.contains("usa") || c.contains("canada") -> 2 // ISNA
+        else -> 3 // Muslim World League
+      }
+    }
+
     fun create(): PrayerApiService {
       val okHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)

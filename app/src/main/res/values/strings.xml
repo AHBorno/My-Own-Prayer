@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">My Own Prayer</string>
+    <string name="widget_tasbeeh_desc">Interactive Tasbeeh / Dhikr Counter widget for your home screen</string>
+    <string name="tasbeeh_counter">Tasbeeh Counter</string>
 </resources>

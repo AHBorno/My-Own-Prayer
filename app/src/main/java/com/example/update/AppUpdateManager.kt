@@ -226,7 +226,7 @@ object AppUpdateManager {
     )
 
     val notification = NotificationCompat.Builder(context, UPDATE_CHANNEL_ID)
-      .setSmallIcon(R.drawable.ic_launcher_foreground)
+      .setSmallIcon(R.drawable.ic_notification)
       .setContentTitle("🚀 App Update Available: v${updateInfo.latestVersionName}")
       .setContentText("A new version is ready! Tap to download and update.")
       .setStyle(

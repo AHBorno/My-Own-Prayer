@@ -1,5 +1,6 @@
 package com.example
 
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
@@ -16,14 +17,19 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ui.PrayerScreen
 import com.example.ui.PrayerViewModel
 import com.example.ui.theme.MyApplicationTheme
+import com.example.util.AlertSoundManager
 
 class MainActivity : ComponentActivity() {
+  private var viewModelInstance: PrayerViewModel? = null
+
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    AlertSoundManager.stopSound()
     enableHighRefreshRate()
     enableEdgeToEdge()
     setContent {
       val viewModel: PrayerViewModel = viewModel()
+      viewModelInstance = viewModel
       val uiState by viewModel.uiState.collectAsStateWithLifecycle()
       val systemDark = isSystemInDarkTheme()
       val isDark = when (uiState.appTheme) {
@@ -32,11 +38,25 @@ class MainActivity : ComponentActivity() {
         else -> systemDark
       }
 
+      // Check if launched from Tasbeeh widget
+      if (intent?.getStringExtra("SOURCE") == "TASBEEH") {
+        viewModel.openTasbeeh()
+      }
+
       MyApplicationTheme(darkTheme = isDark) {
         Surface(modifier = Modifier.fillMaxSize()) {
           PrayerScreen(viewModel = viewModel)
         }
       }
+    }
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    AlertSoundManager.stopSound()
+    if (intent.getStringExtra("SOURCE") == "TASBEEH") {
+      viewModelInstance?.openTasbeeh()
     }
   }
 

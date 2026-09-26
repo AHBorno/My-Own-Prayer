@@ -5,7 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import com.example.alarm.PrayerAlarmScheduler
-import com.example.data.local.PrayerDatabase
+import com.example.worker.PrayerSyncManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -24,21 +24,15 @@ class BootCompletedReceiver : BroadcastReceiver() {
         action == Intent.ACTION_TIME_CHANGED ||
         action == Intent.ACTION_TIMEZONE_CHANGED) {
 
+      // Ensure periodic WorkManager task and internet-connected sync are active
+      PrayerSyncManager.scheduleIdleDailySync(context)
+      PrayerSyncManager.scheduleInternetSyncWorker(context)
+
       val pendingResult = goAsync()
       CoroutineScope(Dispatchers.IO).launch {
         try {
-          val db = PrayerDatabase.getDatabase(context)
-          val latest = db.prayerDao().getLatestPrayerTimesSync()
-          if (latest != null) {
-            val repo = com.example.repository.PrayerRepository(context)
-            PrayerAlarmScheduler.scheduleAlarmsForToday(
-              context = context,
-              prayerEntity = latest,
-              enabledPrayers = repo.getEnabledPrayers(),
-              enabledForbidden = repo.getEnabledForbiddenTimes()
-            )
-            Log.d(TAG, "Rescheduled prayer alarms after reboot/time change")
-          }
+          PrayerAlarmScheduler.scheduleUpcomingAlarms(context)
+          Log.d(TAG, "Rescheduled upcoming prayer alarms after reboot or system time/timezone change")
         } catch (e: Exception) {
           Log.e(TAG, "Failed to reschedule on boot", e)
         } finally {

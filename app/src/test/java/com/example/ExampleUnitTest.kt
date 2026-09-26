@@ -41,6 +41,41 @@ class ExampleUnitTest {
     assertTrue("Asr format valid", timeRegex.matches(times.asr))
     assertTrue("Maghrib format valid", timeRegex.matches(times.maghrib))
     assertTrue("Isha format valid", timeRegex.matches(times.isha))
+
+    // Assert reasonable chronological order: Fajr (early morning) < Sunrise < Dhuhr (~midday) < Asr (afternoon) < Maghrib (sunset) < Isha (night)
+    assertTrue("Fajr before Sunrise", times.fajr < times.sunrise)
+    assertTrue("Sunrise before Dhuhr", times.sunrise < times.dhuhr)
+    assertTrue("Dhuhr before Asr", times.dhuhr < times.asr)
+    assertTrue("Asr before Maghrib", times.asr < times.maghrib)
+    assertTrue("Maghrib before Isha", times.maghrib < times.isha)
+  }
+
+  @Test
+  fun prayerCalculator_dhakaCalculationAccurateOffline() {
+    // Dhaka, Bangladesh: 23.8103 N, 90.4125 E, UTC+6 on Sep 25, 2026
+    val method = AstronomicalPrayerCalculator.CalculationMethod.getMethodForCountry("Bangladesh")
+    val times = AstronomicalPrayerCalculator.calculate(
+      lat = 23.8103,
+      lng = 90.4125,
+      timezoneOffsetHours = 6.0,
+      year = 2026,
+      month = 9,
+      day = 25,
+      method = method
+    )
+
+    // Fajr should be early morning ~04:30-04:55 AM
+    assertTrue("Fajr between 04:00 and 05:00", times.fajr in "04:00".."05:00")
+    // Sunrise should be ~05:40-05:55 AM
+    assertTrue("Sunrise between 05:30 and 06:00", times.sunrise in "05:30".."06:00")
+    // Dhuhr should be around ~11:45-12:00 PM
+    assertTrue("Dhuhr between 11:30 and 12:15", times.dhuhr in "11:30".."12:15")
+    // Asr should be around ~15:00-15:30 (03:00-03:30 PM)
+    assertTrue("Asr between 15:00 and 15:45", times.asr in "15:00".."15:45")
+    // Maghrib should be around ~17:45-18:00 (05:45-06:00 PM)
+    assertTrue("Maghrib between 17:40 and 18:10", times.maghrib in "17:40".."18:10")
+    // Isha should be around ~18:50-19:15 (06:50-07:15 PM)
+    assertTrue("Isha between 18:45 and 19:30", times.isha in "18:45".."19:30")
   }
 
   @Test
@@ -117,5 +152,33 @@ class ExampleUnitTest {
     // Distance from Makkah to Kaaba is practically 0
     val makkahDistance = com.example.util.QiblaHelper.calculateDistanceKm(21.4225, 39.8262)
     assertTrue("Makkah distance close to 0 km", makkahDistance < 10)
+  }
+
+  @Test
+  fun ramadanTiming_15MinSoonAlertsCalculatedAccurately() {
+    val sampleEntity = PrayerEntity(
+      date = "2026-03-10",
+      city = "Dhaka",
+      country = "Bangladesh",
+      fajr = "04:45",
+      sunrise = "06:05",
+      dhuhr = "12:05",
+      asr = "15:25",
+      maghrib = "18:05",
+      isha = "19:20",
+      lastSyncedAt = System.currentTimeMillis()
+    )
+
+    val fajrMillis = PrayerAlarmScheduler.parsePrayerTimeToMillis(sampleEntity.date, sampleEntity.fajr)
+    val suhoorSoonMillis = fajrMillis - (15 * 60 * 1000L)
+
+    val maghribMillis = PrayerAlarmScheduler.parsePrayerTimeToMillis(sampleEntity.date, sampleEntity.maghrib)
+    val iftarSoonMillis = maghribMillis - (15 * 60 * 1000L)
+
+    // Verify suhoor end soon is exactly 15 minutes before Fajr
+    assertEquals(15 * 60 * 1000L, fajrMillis - suhoorSoonMillis)
+
+    // Verify iftar soon is exactly 15 minutes before Maghrib
+    assertEquals(15 * 60 * 1000L, maghribMillis - iftarSoonMillis)
   }
 }

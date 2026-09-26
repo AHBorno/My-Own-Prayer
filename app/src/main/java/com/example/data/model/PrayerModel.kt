@@ -75,3 +75,32 @@ data class ForbiddenTimeItem(
     return AppLanguageHelper.getForbiddenDescription(name, lang)
   }
 }
+
+enum class RamadanDisplayMode(val id: String) {
+  AUTO("auto"),
+  ALWAYS_VISIBLE("always"),
+  OFF("off");
+
+  companion object {
+    fun fromId(id: String): RamadanDisplayMode {
+      return entries.find { it.id.equals(id, ignoreCase = true) } ?: AUTO
+    }
+  }
+}
+
+data class RamadanTimingInfo(
+  val isVisible: Boolean = false,
+  val isDayBeforeRamadan: Boolean = false,
+  val isRamadanActive: Boolean = false,
+  val hijriDay: Int = 0,
+  val suhoorEndTimeFormatted: String = "--:--",
+  val suhoorEndMillis: Long = 0L,
+  val iftarTimeFormatted: String = "--:--",
+  val iftarMillis: Long = 0L,
+  val countdownLabel: String = "",
+  val countdownValue: String = "--:--:--",
+  val isFastingInProgress: Boolean = false,
+  val notificationIftarSoon: Boolean = true,
+  val notificationSuhoorSoon: Boolean = true,
+  val isPreviewMode: Boolean = false
+)
